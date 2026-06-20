@@ -1,0 +1,101 @@
+{
+  "_comment": "Stadtbräu Balancing — ALLE Zahlen an einem Ort. Code liest nur hier. Werte sind Startvorschläge, durch Spielen zu justieren. Siehe GAME_DESIGN.md §9.",
+
+  "start": {
+    "_comment": "Ausgangslage. Knapp genug, dass die erste Investition wehtut.",
+    "cash": 25000,
+    "capacity_hl": 60,
+    "reputation": 45,
+    "market_size_hl": 80,
+    "debt": 0,
+    "lose_threshold_cash": -5000,
+    "goal_years": 7
+  },
+
+  "fixed_costs": {
+    "_comment": "Laufende Kosten je Quartal. Der Motor hinter 'zu schnell gewachsen'.",
+    "base_overhead": 1800,
+    "per_capacity_hl": 18,
+    "_per_capacity_note": "Jeder hl Kapazität kostet pro Quartal — auch ungenutzt. Das bestraft Leerstand."
+  },
+
+  "buildings": {
+    "_comment": "Kapazitäts-Ausbaupfad. Anschaffung einmalig, fixed_per_quarter dauerhaft. Faustregel: 2-3 Quartale Auslastung bis Amortisation.",
+    "stages": [
+      { "id": "gaertank_1",   "name": "Gärtank-Erweiterung", "cost": 14000, "capacity_add_hl": 40, "fixed_per_quarter": 600 },
+      { "id": "abfuellstrasse","name": "Abfüllstraße",        "cost": 22000, "capacity_add_hl": 60, "fixed_per_quarter": 1100 },
+      { "id": "halle_2",       "name": "Zweite Halle",        "cost": 40000, "capacity_add_hl": 120,"fixed_per_quarter": 2200 }
+    ]
+  },
+
+  "staff": {
+    "_comment": "Feste Anstellungen. Lohn je Quartal, Effekt dauerhaft. Lohnen nur bei Auslastung.",
+    "roles": [
+      { "id": "braumeister", "name": "Braumeister", "wage_per_quarter": 2400, "quality_mult": 1.15, "rep_per_quarter": 1 },
+      { "id": "verkaeufer",  "name": "Verkäufer",   "wage_per_quarter": 2000, "market_growth_mult": 1.4 },
+      { "id": "aushilfe",    "name": "Aushilfe",    "wage_per_quarter": 1300, "unit_cost_mult_at_full": 0.88,
+        "_note": "Senkt Stückkosten nur bei hoher Auslastung — Skaleneffekt." }
+    ]
+  },
+
+  "upgrades": {
+    "_comment": "Verbessern statt vergrößern. Wahl 'größer vs. besser'.",
+    "items": [
+      { "id": "energie_rueck", "name": "Energie-Rückgewinnung", "cost": 9000,  "fixed_cost_mult": 0.85 },
+      { "id": "maelzerei",     "name": "Eigene Mälzerei",       "cost": 18000, "brew_cost_mult": 0.78 },
+      { "id": "labor",         "name": "Laborausstattung",      "cost": 7000,  "rnd_quality_bonus": 0.15,
+        "_note": "Verengt die F&E-Streuung und hebt das Ergebnis — Investition verbessert Glück." }
+    ]
+  },
+
+  "debt": {
+    "_comment": "Kredit als aktive Entscheidung. Zins je Quartal = annual/4.",
+    "interest_annual": 0.09,
+    "auto_repay_fraction": 0.05,
+    "_auto_note": "Sicherheitsnetz; freiwillige Sonderzahlung jederzeit möglich.",
+    "credit_line_offers": [
+      { "amount": 15000, "interest_annual": 0.09 },
+      { "amount": 30000, "interest_annual": 0.11 }
+    ]
+  },
+
+  "market": {
+    "_comment": "Marktgröße wächst langsam mit Ruf/Präsenz. Macht Expansion zur Wette. Siehe GAME_DESIGN §7.",
+    "base_growth_per_quarter": 0.02,
+    "rep_growth_factor": 0.0008,
+    "_rep_note": "Wachstum = base + reputation * rep_growth_factor (×Verkäufer-Mult falls angestellt).",
+    "max_market_hl": 600
+  },
+
+  "demand": {
+    "_comment": "Nachfrage pro Sorte = Anteil an Marktgröße × Saison × Ruf × Preis-Elastizität × Sorten-Faktoren.",
+    "reputation_factor": { "base": 0.5, "per_point": 0.005 },
+    "price_elasticity": 1.4,
+    "_elasticity_note": "elasticity_mult = clamp(1 - (priceMod-1)*1.4, 0.4, 1.5). priceMod 0.8..1.3.",
+    "random_spread": [0.9, 1.1],
+    "_spread_note": "Kleine Würze, NICHT Motor. Eng halten (±10%), damit Pech nie killt."
+  },
+
+  "rnd": {
+    "_comment": "F&E statt Roulette. Mehrquartalige Investition, Glück nur in der Ergebnis-Qualität.",
+    "project_cost_per_quarter": 2500,
+    "project_duration_quarters": 3,
+    "directions": ["margenstark", "saisonal", "kult"],
+    "quality_spread": [0.85, 1.15],
+    "_quality_note": "Nur Ausmaß streut, nie das Ob. Laborausstattung verengt und hebt."
+  },
+
+  "seasons": {
+    "_comment": "Saison-Multiplikatoren auf Nachfrage, planbar.",
+    "Frühling": 1.05, "Sommer": 1.25, "Herbst": 1.0, "Winter": 0.85
+  },
+
+  "opportunities": {
+    "_comment": "Gelegenheiten statt Zwangs-Events. Selten, optional, testen vorhandene Kapazität/Ruf. Siehe GAME_DESIGN §6.",
+    "chance_per_quarter": 0.35,
+    "examples": [
+      { "id": "liefervertrag", "name": "Liefervertrag eines Lokals", "requires_capacity_hl": 40, "reward_recurring": true },
+      { "id": "festival",      "name": "Festival-Sponsoring",        "requires_cash": 5000,        "rep_reward": 8 }
+    ]
+  }
+}

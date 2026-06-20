@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Stadtbräu — Mikrobrauerei-Manager</title>
+<style>
+  :root{
+    --malt:#1c1410;--malt2:#241a14;--malt3:#2e2118;--malt4:#38291e;
+    --paper:#e8ddc7;--paper-dim:#c4b59a;--paper-faint:#8a7a62;
+    --copper:#b87333;--copper-bright:#d89150;
+    --hop:#7a9b3e;--hop-bright:#a3c85a;
+    --blood:#9e3b2e;--blood-bright:#c5503f;
+    --gold:#d4a017;--violet:#8a6fa8;
+    --line:rgba(232,221,199,.13);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%;font-size:16px}
+  body{background:var(--malt);color:var(--paper);font-family:Georgia,'Times New Roman',serif;line-height:1.5;min-height:100vh;padding:14px}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 20% 0%,rgba(184,115,51,.09),transparent 55%),
+               radial-gradient(ellipse at 90% 100%,rgba(122,155,62,.06),transparent 50%)}
+  .mono{font-family:'Courier New',monospace;font-variant-numeric:tabular-nums}
+  .wrap{max-width:720px;margin:0 auto;position:relative}
+
+  /* ── HEADER ── */
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--copper);padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap;gap:6px}
+  .brand{font-size:26px;font-weight:bold;letter-spacing:.5px}
+  .brand small{display:block;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--copper-bright);font-family:'Courier New',monospace;margin-top:1px}
+  .period{text-align:right;font-family:'Courier New',monospace;font-size:13px;color:var(--paper-dim)}
+  .period b{color:var(--hop-bright);font-size:15px}
+  .diff-badge{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--copper-bright)}
+
+  /* ── LEDGER ── */
+  .ledger{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:14px}
+  .cell{background:var(--malt2);padding:9px 11px}
+  .cell .lab{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--paper-faint);font-family:'Courier New',monospace}
+  .cell .val{font-family:'Courier New',monospace;font-size:17px;font-weight:bold;margin-top:2px}
+  .cell .val.cash{color:var(--hop-bright)} .cell .val.neg{color:var(--blood-bright)}
+  .cell .sub{font-size:10px;color:var(--paper-faint);font-family:'Courier New',monospace;margin-top:1px}
+
+  /* ── GAUGE BAR ── */
+  .gauge-bar{background:var(--malt2);border:1px solid var(--line);border-left:3px solid var(--copper);padding:12px 14px;margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .gauge-ring{position:relative;width:78px;height:78px;flex-shrink:0}
+  .gauge-ring svg{transform:rotate(-90deg)}
+  .gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .gauge-center .gn{font-family:'Courier New',monospace;font-size:15px;font-weight:bold}
+  .gauge-center .gl{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--paper-faint);font-family:'Courier New',monospace}
+  .gauge-txt h3{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--copper-bright);font-family:'Courier New',monospace;margin-bottom:3px}
+  .gauge-txt p{font-size:13px;color:var(--paper-dim)}
+
+  /* ── PANEL ── */
+  .panel{background:var(--malt2);border:1px solid var(--line);padding:16px;margin-bottom:12px}
+  .panel h2{font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--copper-bright);font-family:'Courier New',monospace;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:7px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .panel h2 .hint{font-size:10px;letter-spacing:.5px;text-transform:none;color:var(--paper-faint);font-family:'Courier New',monospace}
+  .panel h2 .badge-h{font-size:9px;padding:2px 6px;background:rgba(122,155,62,.15);color:var(--hop-bright);border-radius:2px;font-weight:normal;letter-spacing:.5px;text-transform:none}
+
+  /* ── INVEST CARDS ── */
+  .invest-grid{display:flex;flex-direction:column;gap:6px}
+  .inv-card{background:var(--malt3);border:1px solid var(--line);padding:10px 12px;display:flex;align-items:center;gap:10px;border-radius:2px;transition:.12s}
+  .inv-card.owned{border-color:var(--hop);background:rgba(122,155,62,.07)}
+  .inv-card.cant{opacity:.45}
+  .inv-card .ic-info{flex:1;min-width:0}
+  .inv-card .ic-name{font-weight:bold;font-size:14px;margin-bottom:1px}
+  .inv-card .ic-desc{font-size:11px;color:var(--paper-faint);font-family:'Courier New',monospace}
+  .inv-card .ic-cost{font-family:'Courier New',monospace;font-size:11px;color:var(--copper-bright);white-space:nowrap}
+  .inv-btn{flex-shrink:0;padding:6px 12px;border:1px solid var(--copper);background:transparent;color:var(--copper-bright);font-family:'Courier New',monospace;font-size:11px;font-weight:bold;letter-spacing:.5px;cursor:pointer;border-radius:2px;transition:.12s;white-space:nowrap}
+  .inv-btn:hover:not(:disabled){background:var(--copper);color:var(--malt)}
+  .inv-btn:disabled{opacity:.35;cursor:not-allowed}
+  .inv-btn.owned-btn{border-color:var(--hop);color:var(--hop-bright);cursor:default}
+  .inv-btn.fire-btn{border-color:var(--blood);color:var(--blood-bright)}
+  .inv-btn.fire-btn:hover{background:var(--blood);color:var(--paper)}
+  .section-sep{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--paper-faint);font-family:'Courier New',monospace;margin:10px 0 6px;padding-top:8px;border-top:1px dotted var(--line)}
+
+  /* ── PRODUCTION ── */
+  .brew-row{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px dotted var(--line)}
+  .brew-row:last-child{border-bottom:none}
+  .brew-main{display:flex;align-items:center;gap:12px}
+  .brew-swatch{width:8px;height:36px;flex-shrink:0;border-radius:1px}
+  .brew-info{flex:1;min-width:0}
+  .brew-name{font-weight:bold;font-size:14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .badge{font-size:9px;letter-spacing:1px;text-transform:uppercase;font-family:'Courier New',monospace;padding:2px 6px;border-radius:2px;font-weight:normal}
+  .badge.legend{background:rgba(212,160,23,.2);color:var(--gold);border:1px solid var(--gold)}
+  .badge.rare{background:rgba(138,111,168,.2);color:var(--violet);border:1px solid var(--violet)}
+  .badge.trait{background:rgba(122,155,62,.15);color:var(--hop-bright)}
+  .brew-meta{font-size:11px;color:var(--paper-faint);font-family:'Courier New',monospace;margin-top:1px}
+  .brew-qty{display:flex;align-items:center;gap:7px;font-family:'Courier New',monospace}
+  .brew-qty button{width:30px;height:30px;border:1px solid var(--copper);background:transparent;color:var(--copper-bright);font-size:18px;cursor:pointer;border-radius:2px;font-family:'Courier New',monospace;line-height:1;transition:.12s}
+  .brew-qty button:hover:not(:disabled){background:var(--copper);color:var(--malt)}
+  .brew-qty button:disabled{opacity:.3;cursor:not-allowed}
+  .brew-qty .n{min-width:38px;text-align:center;font-size:15px;font-weight:bold;font-family:'Courier New',monospace}
+  .price-row{display:flex;align-items:center;gap:9px;padding:4px 8px 0 20px}
+  .price-row .pl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--paper-faint);min-width:34px;font-family:'Courier New',monospace}
+  .price-row input[type=range]{flex:1;accent-color:var(--copper);height:3px;max-width:240px}
+  .price-row .pv{font-size:11px;font-weight:bold;min-width:110px;text-align:right;font-family:'Courier New',monospace}
+  .prod-foot{display:flex;justify-content:space-between;font-family:'Courier New',monospace;font-size:12px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);color:var(--paper-faint);flex-wrap:wrap;gap:4px}
+  .prod-foot b{color:var(--paper)} .prod-foot .over{color:var(--blood-bright)}
+
+  /* ── SLIDER ── */
+  .slider-row{display:flex;align-items:center;gap:12px}
+  .slider-row input[type=range]{flex:1;accent-color:var(--hop);height:4px}
+  .slider-row .sv{min-width:80px;text-align:right;font-size:14px;font-weight:bold;color:var(--hop-bright);font-family:'Courier New',monospace}
+  .slider-cap{font-size:11px;color:var(--paper-faint);margin-top:6px;font-family:'Courier New',monospace}
+
+  /* ── F&E ── */
+  .rnd-project{background:var(--malt3);border:1px solid var(--line);border-left:3px solid var(--violet);padding:10px 12px;margin-bottom:8px;font-family:'Courier New',monospace;font-size:12px}
+  .rnd-project .rp-name{font-size:13px;color:var(--paper);font-weight:bold;margin-bottom:3px}
+  .rnd-project .rp-prog{color:var(--violet)}
+  .rnd-dir{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .rnd-dir button{padding:7px 12px;background:var(--malt3);border:1px solid var(--line);color:var(--paper-dim);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;border-radius:2px;transition:.12s}
+  .rnd-dir button:hover{border-color:var(--violet);color:var(--paper)}
+  .rnd-dir button.sel{border-color:var(--violet);background:rgba(138,111,168,.15);color:var(--violet)}
+
+  /* ── DEBT PANEL ── */
+  .debt-opts{display:flex;gap:6px;flex-wrap:wrap}
+  .debt-opt{flex:1;min-width:140px;padding:10px;background:var(--malt3);border:1px solid var(--line);text-align:center;cursor:pointer;border-radius:2px;transition:.12s}
+  .debt-opt:hover{border-color:var(--copper)}
+  .debt-opt .do-amt{font-family:'Courier New',monospace;font-size:16px;font-weight:bold;color:var(--copper-bright)}
+  .debt-opt .do-rate{font-family:'Courier New',monospace;font-size:10px;color:var(--paper-faint)}
+
+  /* ── EVENT ── */
+  .event{border-left:3px solid var(--hop)}
+  .event.risk{border-left-color:var(--copper)} .event.crisis{border-left-color:var(--blood)}
+  .etag{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-family:'Courier New',monospace;color:var(--hop-bright);margin-bottom:5px}
+  .event.risk .etag{color:var(--copper-bright)} .event.crisis .etag{color:var(--blood-bright)}
+  .etitle{font-size:18px;font-weight:bold;margin-bottom:5px}
+  .edesc{font-size:13px;color:var(--paper-dim);margin-bottom:12px}
+  .choices{display:flex;flex-direction:column;gap:8px}
+  .choice{text-align:left;background:rgba(232,221,199,.04);border:1px solid var(--line);padding:10px 12px;cursor:pointer;color:var(--paper);font-family:Georgia,serif;font-size:13px;border-radius:2px;transition:.12s;line-height:1.4;width:100%}
+  .choice:hover{border-color:var(--hop);background:rgba(122,155,62,.08)}
+  .choice .clab{font-weight:bold;display:block;margin-bottom:2px}
+  .choice .codds{font-family:'Courier New',monospace;font-size:10px;color:var(--paper-faint)}
+  .codds .danger{color:var(--blood-bright)} .codds .up{color:var(--hop-bright)}
+
+  /* ── BUTTONS ── */
+  .btn-primary{width:100%;padding:14px;background:var(--copper);color:var(--malt);border:none;font-family:'Courier New',monospace;font-size:14px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:2px;transition:.12s}
+  .btn-primary:hover:not(:disabled){background:var(--copper-bright)}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed}
+  .btn-ghost{width:100%;padding:11px;background:transparent;color:var(--copper-bright);border:1px solid var(--copper);font-family:'Courier New',monospace;font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:2px;transition:.12s;margin-top:8px}
+  .btn-ghost:hover:not(:disabled){background:var(--copper);color:var(--malt)}
+  .btn-ghost:disabled{opacity:.35;cursor:not-allowed}
+
+  /* ── BANNER ── */
+  .banner{padding:11px 14px;margin-bottom:12px;font-family:'Courier New',monospace;border-radius:2px;font-size:13px}
+  .banner.profit{background:rgba(122,155,62,.13);border:1px solid var(--hop)}
+  .banner.loss{background:rgba(158,59,46,.15);border:1px solid var(--blood)}
+  .banner b{font-size:15px}
+
+  /* ── LOG ── */
+  .log{font-family:'Courier New',monospace;font-size:12px;max-height:200px;overflow-y:auto}
+  .log .entry{padding:6px 0;border-bottom:1px dotted var(--line);display:flex;gap:8px}
+  .log .entry:last-child{border-bottom:none}
+  .log .q{color:var(--copper-bright);flex-shrink:0;min-width:14px}
+  .log .entry.good .t b{color:var(--hop-bright)} .log .entry.bad .t b{color:var(--blood-bright)}
+  .log .entry.jackpot .t b{color:var(--gold)} .log .t{color:var(--paper-faint)}
+
+  /* ── OVERLAY ── */
+  .overlay{position:fixed;inset:0;background:rgba(15,10,7,.93);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .overlay.hidden{display:none}
+  .modal{max-width:480px;width:100%;background:var(--malt2);border:2px solid var(--copper);padding:26px;text-align:center;max-height:90vh;overflow-y:auto}
+  .modal h1{font-size:24px;margin-bottom:4px}
+  .modal .tagline{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--copper-bright);font-family:'Courier New',monospace;margin-bottom:16px}
+  .modal p{font-size:13px;color:var(--paper-dim);margin-bottom:12px;text-align:left}
+  .modal .score-box{font-family:'Courier New',monospace;font-size:13px;color:var(--paper);margin-bottom:16px;text-align:left;background:var(--malt3);padding:12px;border:1px solid var(--line)}
+  .modal .score-box div{margin-bottom:4px}
+  .diff-btns{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+  .diff-btns .btn-ghost{flex:1;margin-top:0}
+
+  /* ── F&E modal ── */
+  .rnd-result{padding:12px;border-radius:3px;font-family:'Courier New',monospace;margin:10px 0}
+  .rnd-result.win{background:rgba(212,160,23,.13);border:1px solid var(--gold)}
+  .rnd-result.ok{background:rgba(122,155,62,.11);border:1px solid var(--hop)}
+  .rnd-result .rr-name{font-size:16px;font-weight:bold;color:var(--paper);margin-bottom:3px}
+  .rnd-result .rr-traits{font-size:11px;color:var(--paper-dim)}
+
+  .hidden{display:none}
+  @media(max-width:520px){
+    .ledger{grid-template-columns:repeat(2,1fr)}
+    .brand{font-size:22px}body{padding:10px}.panel{padding:12px}
+    .brew-qty button{width:34px;height:34px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div><div class="brand">Stadtbräu<small>Mikrobrauerei · Uster</small></div></div>
+    <div class="period">
+      <div class="diff-badge" id="diffLabel">Standard</div>
+      <div>Jahr <span id="yearEl">1</span> · <b id="seasonEl">Frühling</b></div>
+    </div>
+  </header>
+
+  <div class="ledger">
+    <div class="cell"><div class="lab">Bargeld</div><div id="cashV" class="val cash mono">—</div><div id="debtV" class="sub">&nbsp;</div></div>
+    <div class="cell"><div class="lab">Ruf</div><div id="repV" class="val mono">—</div><div id="repWord" class="sub">&nbsp;</div></div>
+    <div class="cell"><div class="lab">Kapazität</div><div id="capV" class="val mono">—</div><div id="mktSzV" class="sub">&nbsp;</div></div>
+    <div class="cell"><div class="lab">Fixkosten / Q</div><div id="fixV" class="val mono">—</div><div class="sub">laufend</div></div>
+  </div>
+
+  <div class="gauge-bar">
+    <div class="gauge-ring">
+      <svg width="78" height="78" viewBox="0 0 78 78">
+        <circle cx="39" cy="39" r="32" fill="none" stroke="rgba(232,221,199,.09)" stroke-width="8"/>
+        <circle id="gaugeArc" cx="39" cy="39" r="32" fill="none" stroke="var(--hop)" stroke-width="8" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201"/>
+      </svg>
+      <div class="gauge-center"><div id="gaugeNum" class="gn">—</div><div class="gl">Marge</div></div>
+    </div>
+    <div class="gauge-txt">
+      <h3 id="gaugeHead">Sudkessel</h3>
+      <p id="gaugeTxt">Plane knapp, vermarkte klug, riskiere mit Bedacht. Fixkosten laufen immer.</p>
+    </div>
+  </div>
+
+  <div id="resultBanner"></div>
+
+  <!-- PLAN PHASE -->
+  <div id="planPhase">
+
+    <!-- Investments -->
+    <div class="panel" id="investPanel">
+      <h2>Investitionen <span class="hint">Einmalig · konkurrieren mit Produktion und Marketing</span></h2>
+      <div id="investGrid" class="invest-grid"></div>
+    </div>
+
+    <!-- Production -->
+    <div class="panel">
+      <h2>Produktionsplan <span class="hint">in Hektoliter (hl)</span></h2>
+      <div id="brewList"></div>
+      <div class="prod-foot">
+        <span>Kapazität <b id="pfCap">0</b> · Geplant <b id="pfPlan">0</b> hl</span>
+        <span>Braukosten <b id="pfCost" class="mono">CHF 0</b></span>
+      </div>
+    </div>
+
+    <!-- Marketing -->
+    <div class="panel">
+      <h2>Marketing <span class="hint">Schub für Nachfrage</span></h2>
+      <div class="slider-row">
+        <input type="range" id="mkt" min="0" max="8000" step="500" value="1500">
+        <span class="sv" id="mktV">CHF 1'500</span>
+      </div>
+      <div class="slider-cap" id="mktCap"></div>
+    </div>
+
+    <!-- F&E -->
+    <div class="panel" id="rndPanel">
+      <h2>Forschung &amp; Entwicklung <span class="hint">Neue Sorten · 3 Quartale · verdient, nicht erwürfelt</span></h2>
+      <div id="rndContent"></div>
+    </div>
+
+    <!-- Debt repay -->
+    <div class="panel hidden" id="debtRepayPanel">
+      <h2>Schulden tilgen <span class="hint" id="debtRepayHint">&nbsp;</span></h2>
+      <div class="slider-row">
+        <input type="range" id="repay" min="0" max="0" step="500" value="0">
+        <span class="sv mono" id="repayV">CHF 0</span>
+      </div>
+      <div class="slider-cap" id="repayCap"></div>
+      <button class="btn-ghost" id="repayBtn">Sonderzahlung leisten</button>
+    </div>
+
+    <button class="btn-primary" id="startQBtn">Quartal starten →</button>
+  </div>
+
+  <!-- EVENT PHASE -->
+  <div id="eventPhase" class="hidden">
+    <div class="panel event" id="eventCard">
+      <div class="etag" id="eventTag">Ereignis</div>
+      <div class="etitle" id="eventTitle"></div>
+      <div class="edesc" id="eventDesc"></div>
+      <div class="choices" id="eventChoices"></div>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="panel">
+    <h2>Geschäftsbuch</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+</div><!-- .wrap -->
+
+<div class="overlay hidden" id="overlay"><div class="modal" id="modal"></div></div>
+
+<script>
+"use strict";
+
+/* ──────────────────────────────────────────────
+   BALANCE — alle Zahlen an einem Ort
+   ────────────────────────────────────────────── */
+const B = {
+  start: { cash: 25000, capacity: 60, rep: 48, marketSize: 80, debt: 0, goalYears: 7, loseThreshold: -6000 },
+  fixedCosts: { baseOverhead: 1200, perCapacityHl: 15 },
+  buildings: [
+    { id:"gaertank",  name:"Gärtank-Erweiterung", cost:14000, capAdd:40, fixPerQ:0,   desc:"+ 40 hl Kapazität" },
+    { id:"abfuell",   name:"Abfüllstraße",         cost:22000, capAdd:60, fixPerQ:0,   desc:"+ 60 hl · setzt Gärtank voraus", requires:"gaertank" },
+    { id:"halle2",    name:"Zweite Halle",          cost:40000, capAdd:120,fixPerQ:0,   desc:"+ 120 hl · setzt Abfüllstraße voraus", requires:"abfuell" },
+  ],
+  staff: [
+    { id:"braumeister",name:"Braumeister",  wage:2400, desc:"Qualität ×1.15 · Ruf +1/Q",    qualityMult:1.15, repPerQ:1 },
+    { id:"verkaeufer", name:"Verkäufer",    wage:2000, desc:"Marktwachstum ×1.4",             marketMult:1.4 },
+    { id:"aushilfe",   name:"Aushilfe",     wage:1200, desc:"Stückkosten −12% bei Vollbetrieb",costMult:0.88 },
+  ],
+  upgrades: [
+    { id:"energie",    name:"Energie-Rückgewinnung",cost:9000,  desc:"Fixkosten −15%",           fixMult:0.85 },
+    { id:"maelzerei",  name:"Eigene Mälzerei",       cost:18000, desc:"Braukosten −22%",          brewMult:0.78 },
+    { id:"labor",      name:"Laborausstattung",       cost:7000,  desc:"F&E: Qualität besser",     rndBonus:0.10 },
+  ],
+  creditLines: [
+    { amount:15000, interestAnnual:0.09 },
+    { amount:30000, interestAnnual:0.11 },
+  ],
+  market: { baseGrowthPerQ:0.022, repGrowthFactor:0.0007, max:600 },
+  demand: { repBase:0.5, repPerPoint:0.005, priceElasticity:1.4, spread:[0.82,1.18] },
+  rnd: { costPerQ:2500, durationQ:3, qualitySpread:[0.88,1.12] },
+  seasons: { Frühling:1.05, Sommer:1.25, Herbst:1.0, Winter:0.85 },
+};
+
+const SEASONS = ["Frühling","Sommer","Herbst","Winter"];
+
+/* ──────────────────────────────────────────────
+   DIFFICULTY
+   ────────────────────────────────────────────── */
+const DIFF = {
+  easy: { label:"Sanft",    cashMult:1.25, demandMult:1.10, eventBad:0.85 },
+  std:  { label:"Standard", cashMult:1.00, demandMult:1.00, eventBad:1.00 },
+  hard: { label:"Hart",     cashMult:0.70, demandMult:0.88, eventBad:1.15 },
+};
+
+/* ──────────────────────────────────────────────
+   BASE BREWS
+   ────────────────────────────────────────────── */
+const BASE_BREWS = [
+  { id:"lager",  name:"Helles Lager",    color:"#d4a017", brewCost:145, basePrice:295, meta:"stabile Nachfrage",
+    baseDemand:38, pull:{Frühling:1.05,Sommer:1.35,Herbst:0.95,Winter:0.80} },
+  { id:"ipa",    name:"Hopfen-IPA",      color:"#7a9b3e", brewCost:195, basePrice:425, meta:"Kennerpublikum",
+    baseDemand:22, pull:{Frühling:1.10,Sommer:1.20,Herbst:1.00,Winter:0.92} },
+  { id:"saison", name:"Saison-Spezial",  color:"#b87333", brewCost:220, basePrice:530, meta:"belohnt Timing",
+    baseDemand:12, pull:{Frühling:1.30,Sommer:0.70,Herbst:1.45,Winter:1.50} },
+];
+
+/* ──────────────────────────────────────────────
+   F&E DIRECTIONS
+   ────────────────────────────────────────────── */
+const RND_DIRS = [
+  { id:"margin",  name:"Hohe Marge",      desc:"Teurer, günstig im Sud",  apply:b=>{ b.basePrice=Math.round(b.basePrice*1.30); b.brewCost=Math.round(b.brewCost*0.85); } },
+  { id:"season",  name:"Saisonanker",     desc:"Dominiert eine Saison",   apply:b=>{ const s=["Sommer","Winter"][Math.floor(Math.random()*2)]; b.pull[s]=1.80; b.meta="Saisonanker ("+s+")"; } },
+  { id:"cult",    name:"Kult-Potenzial",  desc:"Breite Nachfrage + Buzz", apply:b=>{ b.cultDemand=true; b.baseDemand=Math.round(b.baseDemand*1.18); b.repBonus=3; b.rarity="legend"; } },
+];
+
+const LAB_ADJ  = ["Wilde","Rauchige","Barrique-","Imperial-","Sauer-","Trübe","Alpine","Nebel-","Kloster-","Granit-"];
+const LAB_NOUN = ["Weisse","Tripel","Stout","Gose","Bock","Ale","Porter","Kellerbier","Märzen","Roten"];
+const BREW_COLORS = ["#8a6fa8","#c5503f","#3e8a9b","#b8862f","#6a8a3e","#9b6a3e","#5a8a9b"];
+
+/* ──────────────────────────────────────────────
+   EVENTS
+   ────────────────────────────────────────────── */
+const EVENTS = [
+  { id:"grossauftrag", tag:"Chance", risk:true, title:"Restaurantkette fragt an",
+    desc:"40 hl Lager zum Dumpingpreis, sofortige Lieferung — oder du lässt es.",
+    choices:[
+      { lab:"Annehmen (40 hl Lager zu CHF 210)", odds:`<span class="danger">Strafe bei Unterlieferung</span>`,
+        run(){ const b=S.brews.find(x=>x.id==="lager"); const have=(b?b.plan:0);
+          if(have<40) return{cash:-1500,rep:-6,txt:"Unterlieferung — Vertragsstrafe.",cls:"bad"};
+          S._consumeLager=40; return{cash:40*210,rep:+3,txt:"Grossauftrag erfüllt.",cls:"good"}; } },
+      { lab:"Ablehnen", odds:"kein Risiko", run(){ return{cash:0,rep:0,txt:"Du bleibst bei deinen Preisen.",cls:""}; } },
+    ]},
+  { id:"maschine", tag:"Störung", risk:true, title:"Kühlkompressor streikt",
+    desc:"Die Kühlung fällt mitten in der Gärung aus.",
+    choices:[
+      { lab:"Reparieren (CHF 5'200)", odds:"sicher", run(){ return{cash:-5200,rep:0,txt:"Teuer, aber die Charge ist gerettet.",cls:""}; } },
+      { lab:"Improvisieren", odds:`<span class="up">50% ok</span> · <span class="danger">50% halbe Charge weg</span>`,
+        run(){ if(Math.random()<0.5) return{cash:-300,rep:+1,txt:"Glück gehabt.",cls:"good"};
+          S._spoilFrac=0.5; return{cash:-300,rep:-4,txt:"Kühlung kippte — halbe Produktion hin.",cls:"bad"}; } },
+    ]},
+  { id:"festival", tag:"Chance", risk:false, title:"Sponsoring fürs Dorffest",
+    desc:"Sichtbarkeit gegen Beitrag.",
+    choices:[
+      { lab:"Gross (CHF 5'500)", odds:`<span class="up">viel Ruf + Absatz</span>`,
+        run(){ return{cash:-5500,rep:+9,demandBoost:0.15,txt:"Dein Logo überall.",cls:"good"}; } },
+      { lab:"Klein (CHF 1'400)", odds:"etwas Ruf",
+        run(){ return{cash:-1400,rep:+3,demandBoost:0.04,txt:"Bescheiden, aber solide.",cls:""}; } },
+      { lab:"Aussetzen", odds:`<span class="danger">−Ruf</span>`,
+        run(){ return{cash:0,rep:-2,txt:"Andere nutzten die Bühne.",cls:"bad"}; } },
+    ]},
+  { id:"kredit", tag:"Finanzierung", risk:true, title:"Bank bietet Investitionskredit",
+    desc:"CHF 16'000 zu 9%/Jahr — Hebel für schnelleres Wachstum.",
+    choices:[
+      { lab:"Nehmen (+Gärtank direkt bauen)", odds:`<span class="danger">Schulden + Zins</span>`,
+        run(){ S.debt+=16000; S.cash+=16000; buyBuilding("gaertank",true);
+          return{cash:0,rep:0,txt:"Neuer Gärtank — Kapazität wächst, Schuld auch.",cls:""}; } },
+      { lab:"Ablehnen", odds:"kein Risiko",
+        run(){ return{cash:0,rep:0,txt:"Du wächst aus eigener Kraft.",cls:""}; } },
+    ]},
+  { id:"kritik", tag:"Presse", risk:true, title:"Bier-Blogger probiert dein IPA",
+    desc:"Sein Urteil verbreitet sich schnell — hängt an deinem Ruf.",
+    choices:[
+      { lab:"Abwarten", odds:"Ausgang hängt am Ruf",
+        run(){ if(Math.random()<0.35+S.rep/220) return{cash:0,rep:+8,demandBoost:0.12,txt:"Begeisterte Rezension!",cls:"good"};
+          return{cash:0,rep:-7,demandBoost:-0.09,txt:"Verriss. Gegenwind in der Szene.",cls:"bad"}; } },
+    ]},
+  { id:"rohstoff", tag:"Markt", risk:true, title:"Hopfenpreise schwanken",
+    desc:"Jahresvorrat zum Vorzugspreis — Wette auf stabile Produktion.",
+    choices:[
+      { lab:"Vorrat kaufen (CHF 4'000)", odds:`<span class="up">2 Quartale −18% Braukosten</span>`,
+        run(){ S.flags.hopfenvorrat=2; return{cash:-4000,rep:0,txt:"Lager voller Hopfen.",cls:""}; } },
+      { lab:"Wie bisher", odds:"kein Risiko",
+        run(){ return{cash:0,rep:0,txt:"Du kaufst nach Bedarf.",cls:""}; } },
+    ]},
+  { id:"steuer", tag:"Behörde", risk:false, title:"Nachzahlung vom Steueramt",
+    desc:"Eine alte Verbuchung wurde korrigiert.",
+    choices:[
+      { lab:"Sofort zahlen (CHF 3'200)", odds:"erledigt",
+        run(){ return{cash:-3200,rep:0,txt:"Bezahlt. Ärgerlich, aber sauber.",cls:"bad"}; } },
+      { lab:"Einsprache (Anwalt CHF 1'200)", odds:`<span class="up">55% Erlass</span> · <span class="danger">45% voll</span>`,
+        run(){ if(Math.random()<0.55) return{cash:-1200,rep:0,txt:"Einsprache erfolgreich.",cls:"good"};
+          return{cash:-4400,rep:0,txt:"Abgelehnt. Steuer plus Anwalt.",cls:"bad"}; } },
+    ]},
+  { id:"konkurrenz", tag:"Markt", risk:false, title:"Neue Brauerei im Dorf",
+    desc:"Ein Konkurrent öffnet nebenan.",
+    choices:[
+      { lab:"Preiskampf", odds:`<span class="danger">−Marge</span>`,
+        run(){ S._priceWar=true; return{cash:0,rep:+2,txt:"Du hältst die Preise tief.",cls:""}; } },
+      { lab:"Auf Qualität setzen", odds:`<span class="danger">−Absatz</span> · <span class="up">+Ruf</span>`,
+        run(){ S._qualityStand=true; return{cash:0,rep:+5,txt:"Du grenzt dich nach oben ab.",cls:"good"}; } },
+    ]},
+  { id:"flaute", tag:"Krise", crisis:true, title:"Konjunkturflaute",
+    desc:"Die Wirtschaft schwächelt, die Leute sparen beim Bier.",
+    choices:[
+      { lab:"Durchhalten", odds:`<span class="danger">−25% Nachfrage</span>`,
+        run(){ S._slump=0.25; return{cash:0,rep:0,txt:"Du fährst auf Sicht.",cls:"bad"}; } },
+      { lab:"Notfall-Marketing (CHF 2'500)", odds:`<span class="danger">−12% Nachfrage</span>`,
+        run(){ S._slump=0.12; return{cash:-2500,rep:+1,txt:"Aktion dämpft den Einbruch.",cls:""}; } },
+    ]},
+  { id:"liefervertrag", tag:"Chance", risk:false, title:"Gastronomie-Liefervertrag",
+    desc:"Ein Restaurantnetz will dein Bier regelmässig — CHF 1'800 Bonus pro Quartal, wenn du liefern kannst.",
+    choices:[
+      { lab:"Vertrag annehmen", odds:`<span class="danger">mind. 30 hl Kapazität nötig</span>`,
+        run(){ if(S.capacity<90) return{cash:0,rep:0,txt:"Zu wenig Kapazität für den Vertrag.",cls:"bad"};
+          S.flags.liefervertrag=true; return{cash:+1800,rep:+4,txt:"Vertrag gesichert. Wiederkehrende Einnahmen.",cls:"good"}; } },
+      { lab:"Ablehnen", odds:"", run(){ return{cash:0,rep:0,txt:"Du fokussierst auf den Direktverkauf.",cls:""}; } },
+    ]},
+];
+
+/* ──────────────────────────────────────────────
+   STATE
+   ────────────────────────────────────────────── */
+let S = null;
+
+function newGame(diffKey) {
+  const d = DIFF[diffKey];
+  const cash = Math.round(B.start.cash * d.cashMult);
+  S = {
+    diffKey, diff: d,
+    year: 1, seasonIdx: 0,
+    cash, debt: 0,
+    rep: B.start.rep,
+    capacity: B.start.capacity,
+    marketSize: B.start.marketSize,
+    stock: 0,
+    brews: BASE_BREWS.map(b => ({
+      ...b, pull: {...b.pull}, priceMod: 1, plan: b.id==="lager"?22:b.id==="ipa"?10:4,
+      lastSold: undefined, lastAvail: undefined,
+    })),
+    marketing: 1500,
+    buildings: [],
+    staff: {},
+    upgrades: {},
+    rndProjects: [],
+    rndDir: null,
+    phase: "plan",
+    flags: {}, log: [], history: [],
+    lastEvent: null, lastQuarterResult: null, currentEvent: null,
+  };
+  pushLog("·","Gründung",`Stufe „${d.label}" · Startkapital ${fmt(cash)}.`,"");
+  render();
+}
+
+/* ──────────────────────────────────────────────
+   HELPERS
+   ────────────────────────────────────────────── */
+const fmt  = n => "CHF " + Math.round(n).toLocaleString("de-CH").replace(/,/g,"'");
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const rnd  = (a,b) => a + Math.random() * (b - a);
+const season = () => SEASONS[S.seasonIdx];
+
+function fixedCost() {
+  let f = B.fixedCosts.baseOverhead + B.fixedCosts.perCapacityHl * S.capacity;
+  for (const r of B.staff) if (S.staff[r.id]) f += r.wage;
+  for (const p of S.rndProjects) f += B.rnd.costPerQ;
+  const upgEff = S.upgrades.energie ? B.upgrades.find(u=>u.id==="energie").fixMult : 1;
+  f = Math.round(f * upgEff);
+  return f;
+}
+
+function brewCostTotal() {
+  const brewMult = S.upgrades.maelzerei ? B.upgrades.find(u=>u.id==="maelzerei").brewMult : 1;
+  const aushilfeMult = (S.staff.aushilfe && plannedUnits() >= S.capacity * 0.8) ?
+    B.staff.find(r=>r.id==="aushilfe").costMult : 1;
+  const hopfenMult = S.flags.hopfenvorrat > 0 ? 0.82 : 1;
+  return Math.round(S.brews.reduce((s,b)=>s + b.plan * b.brewCost, 0) * brewMult * aushilfeMult * hopfenMult);
+}
+
+function plannedUnits() { return S.brews.reduce((s,b)=>s+b.plan,0); }
+
+function estimateDemand(b) {
+  const sea = season();
+  const repFactor = B.demand.repBase + S.rep * B.demand.repPerPoint;
+  const qualMult = S.staff.braumeister ? B.staff.find(r=>r.id==="braumeister").qualityMult : 1;
+  const cultMult = b.cultDemand ? 1.30 : 1;
+  const pm = b.priceMod || 1;
+  const elas = clamp(1 - (pm-1) * B.demand.priceElasticity, 0.40, 1.50);
+  const mktBoost = S.marketing / 15000;
+  // scale baseDemand relative to starting marketSize
+  const mktScale = S.marketSize / B.start.marketSize;
+  return Math.round(b.baseDemand * mktScale * (b.pull[sea]||1) * repFactor * qualMult * cultMult * elas * S.diff.demandMult * (1 + mktBoost));
+}
+
+function pushLog(q,title,text,cls) {
+  S.log.unshift({q,title,text,cls});
+  if (S.log.length > 50) S.log.pop();
+}
+
+/* ──────────────────────────────────────────────
+   INVESTMENTS
+   ────────────────────────────────────────────── */
+function buyBuilding(id, free=false) {
+  const def = B.buildings.find(b=>b.id===id);
+  if (!def) return;
+  if (!free && S.cash < def.cost) return;
+  if (S.buildings.includes(id)) return;
+  if (def.requires && !S.buildings.includes(def.requires)) return;
+  if (!free) S.cash -= def.cost;
+  S.buildings.push(id);
+  S.capacity += def.capAdd;
+  pushLog("🏭", def.name, `Kapazität +${def.capAdd} hl. Neu: ${S.capacity} hl.`, "good");
+  render();
+}
+
+function hireStaff(id) {
+  const def = B.staff.find(r=>r.id===id);
+  if (!def || S.staff[id]) return;
+  S.staff[id] = true;
+  pushLog("👤", def.name + " eingestellt", `Lohn +${fmt(def.wage)}/Quartal.`, "");
+  render();
+}
+
+function fireStaff(id) {
+  const def = B.staff.find(r=>r.id===id);
+  if (!def || !S.staff[id]) return;
+  delete S.staff[id];
+  pushLog("👤", def.name + " entlassen", `Lohnkosten sinken.`, "");
+  render();
+}
+
+function buyUpgrade(id) {
+  const def = B.upgrades.find(u=>u.id===id);
+  if (!def || S.upgrades[id] || S.cash < def.cost) return;
+  S.cash -= def.cost;
+  S.upgrades[id] = true;
+  pushLog("⚙️", def.name, `Einbau abgeschlossen. Wirkung: ${def.desc}.`, "good");
+  render();
+}
+
+/* ──────────────────────────────────────────────
+   F&E
+   ────────────────────────────────────────────── */
+function startRndProject(dirId) {
+  if (S.rndProjects.length > 0) return; // one project at a time
+  const dir = RND_DIRS.find(d=>d.id===dirId);
+  if (!dir) return;
+  S.rndProjects.push({ dirId, quartersLeft: B.rnd.durationQ, name: makeName() });
+  S.rndDir = null;
+  pushLog("🧪","F&E gestartet",`${dir.name} · ${B.rnd.durationQ} Quartale · ${fmt(B.rnd.costPerQ)}/Q.`,"");
+  render();
+}
+
+function tickRndProjects() {
+  const done = [];
+  for (const p of S.rndProjects) {
+    p.quartersLeft--;
+    if (p.quartersLeft <= 0) done.push(p);
+  }
+  S.rndProjects = S.rndProjects.filter(p=>p.quartersLeft>0);
+  for (const p of done) finishRndProject(p);
+}
+
+function finishRndProject(p) {
+  const dir = RND_DIRS.find(d=>d.id===p.dirId);
+  const labBonus = S.upgrades.labor ? B.upgrades.find(u=>u.id==="labor").rndBonus : 0;
+  const [lo,hi] = B.rnd.qualitySpread;
+  const qualFactor = rnd(lo + labBonus, hi + labBonus);
+  const brew = {
+    id: "rnd_" + Date.now(),
+    name: p.name,
+    color: BREW_COLORS[Math.floor(Math.random()*BREW_COLORS.length)],
+    brewCost: Math.round(rnd(165,235) * qualFactor),
+    basePrice: Math.round(rnd(400,550) * qualFactor),
+    meta: "Eigenkreation · " + dir.name,
+    baseDemand: Math.round(rnd(12,20)),
+    pull: { Frühling:1, Sommer:1, Herbst:1, Winter:1 },
+    priceMod: 1, plan: 0, rarity:"rare",
+    traitLabels: [dir.name],
+  };
+  dir.apply(brew);
+  S.brews.push(brew);
+  const tier = brew.rarity==="legend" ? "jackpot" : "good";
+  pushLog("🧪","F&E abgeschlossen!",`„${brew.name}" ist fertig — ${dir.name}. Ab sofort im Sortiment.`, tier);
+  setTimeout(()=>showRndModal(brew, dir), 200);
+}
+
+function showRndModal(brew, dir) {
+  const cls = brew.rarity==="legend" ? "win" : "ok";
+  const head = brew.rarity==="legend" ? `<h1 style="color:var(--gold)">Kult-Bier fertig! 🎉</h1>`
+                                       : `<h1 style="color:var(--hop-bright)">Neue Sorte bereit</h1>`;
+  modal.innerHTML = `${head}<div class="tagline">F&E abgeschlossen</div>
+    <div class="rnd-result ${cls}">
+      <div class="rr-name">${brew.name}</div>
+      <div class="rr-traits">✦ ${dir.name} · ${brew.meta}<br>
+        Basispreis ${fmt(brew.basePrice)}/hl · Braukosten ${fmt(brew.brewCost)}/hl</div>
+    </div>
+    <p>Füge sie im nächsten Produktionsplan ein und setze den Preis.</p>
+    <button class="btn-primary" id="rndClose">Weiter</button>`;
+  overlay.classList.remove("hidden");
+  document.getElementById("rndClose").onclick = () => { overlay.classList.add("hidden"); render(); };
+}
+
+function makeName() {
+  return LAB_ADJ[Math.floor(Math.random()*LAB_ADJ.length)] + LAB_NOUN[Math.floor(Math.random()*LAB_NOUN.length)];
+}
+
+/* ──────────────────────────────────────────────
+   QUARTER LOGIC
+   ────────────────────────────────────────────── */
+function startQuarter() {
+  if (plannedUnits() > S.capacity) return;
+  S.phase = "event";
+  S.currentEvent = pickEvent();
+  render();
+}
+
+function pickEvent() {
+  let pool = EVENTS.filter(e => e.id !== S.lastEvent);
+  pool = pool.filter(e => !e.crisis || Math.random() < (S.diffKey==="hard" ? 0.45 : 0.25));
+  const e = pool.length ? pool[Math.floor(Math.random()*pool.length)] : EVENTS[0];
+  S.lastEvent = e.id;
+  return e;
+}
+
+function chooseEvent(i) {
+  const ev = S.currentEvent;
+  const res = ev.choices[i].run();
+  if (res.cash) S.cash += res.cash;
+  if (res.rep)  S.rep = clamp(S.rep + res.rep, 0, 100);
+  pushLog("!", ev.title, res.txt, res.cls);
+
+  const q = resolveQuarter(res);
+  S.lastQuarterResult = q;
+  advanceTime();
+
+  if (S.cash < B.start.loseThreshold) { render(); setTimeout(()=>gameOver(false),100); return; }
+  if (S.year > B.start.goalYears)      { render(); setTimeout(()=>gameOver(true),100);  return; }
+
+  S.phase = "plan";
+  render();
+}
+
+function resolveQuarter(eventRes) {
+  const sea = season();
+  const notes = [];
+
+  // Marketing cost
+  S.cash -= S.marketing;
+  const mktBoost = S.marketing / 15000;
+
+  // Brew costs
+  const cost = brewCostTotal();
+  S.cash -= cost;
+
+  // Fixed costs
+  const fix = fixedCost();
+  S.cash -= fix;
+
+  // Production (with spoilage)
+  const produced = {};
+  S.brews.forEach(b => produced[b.id] = b.plan);
+  if (S._spoilFrac) {
+    S.brews.forEach(b => produced[b.id] = Math.floor(produced[b.id] * (1-S._spoilFrac)));
+    notes.push("Charge teils verdorben.");
+  }
+
+  const demBoost = (eventRes && eventRes.demandBoost) || 0;
+  const repFactor = B.demand.repBase + S.rep * B.demand.repPerPoint;
+  const qualMult = S.staff.braumeister ? B.staff.find(r=>r.id==="braumeister").qualityMult : 1;
+  const slumpMult = S._slump ? 1-S._slump : 1;
+  const priceWarMult = S._priceWar ? 0.80 : 1;
+  const qualStandDemMult = S._qualityStand ? 0.85 : 1;
+  const mktScl = S.marketSize / B.start.marketSize;
+
+  let revenue = 0, soldTotal = 0, prodTotal = 0;
+  const perBrew = [];
+  let repGain = 0;
+
+  for (const b of S.brews) {
+    const avail = produced[b.id] || 0;
+    prodTotal += avail;
+    if (avail === 0 && b.plan === 0) continue;
+    const cultMult = b.cultDemand ? 1.30 : 1;
+    const pm = b.priceMod || 1;
+    const elas = clamp(1-(pm-1)*B.demand.priceElasticity, 0.40, 1.50);
+    const rawDemand = b.baseDemand * mktScl * (b.pull[sea]||1) * repFactor * qualMult * cultMult * elas
+      * S.diff.demandMult * slumpMult * qualStandDemMult * (1 + mktBoost + demBoost);
+    const demand = Math.round(rawDemand * rnd(...B.demand.spread));
+    const sold = Math.min(avail, demand);
+    const price = b.basePrice * pm * priceWarMult;
+    revenue += sold * price;
+    soldTotal += sold;
+    if (b.repBonus && sold > 0) repGain += b.repBonus;
+    b.lastSold = sold; b.lastAvail = avail; b.lastDemand = demand;
+    perBrew.push({ name:b.name, sold, avail });
+  }
+
+  // Leftover stock
+  const leftover = Math.max(0, prodTotal - soldTotal);
+  const oldSold = Math.min(S.stock, Math.round(rnd(0.2,0.45)*S.stock));
+  revenue += oldSold * 300;
+  S.stock = Math.round(((S.stock - oldSold) + leftover) * 0.80);
+  S.cash += revenue;
+
+  // Debt: interest + auto-repay
+  if (S.debt > 0) {
+    const interest = Math.round(S.debt * 0.09 / 4);
+    const autoRepay = Math.min(S.debt, Math.round(S.debt * 0.05));
+    S.cash -= interest + autoRepay;
+    S.debt = Math.max(0, S.debt - autoRepay);
+    notes.push("Kredit: Zins "+fmt(interest)+", Tilgung "+fmt(autoRepay)+".");
+  }
+
+  // Recurring liefervertrag bonus
+  if (S.flags.liefervertrag && S.capacity >= 90) { S.cash += 1800; notes.push("Liefervertrag: +CHF 1'800."); }
+
+  // Reputation drift
+  if (repGain) { S.rep = clamp(S.rep+repGain,0,100); notes.push("Buzz-Sorten heben den Ruf."); }
+  if (B.staff.find(r=>r.id==="braumeister") && S.staff.braumeister) {
+    S.rep = clamp(S.rep + B.staff.find(r=>r.id==="braumeister").repPerQ, 0, 100);
+  }
+  if (leftover > S.capacity * 0.38) { S.rep = clamp(S.rep-4,0,100); notes.push("Überproduktion drückt den Ruf."); }
+  if (prodTotal > 0 && soldTotal >= prodTotal * 0.93) { S.rep = clamp(S.rep+2,0,100); notes.push("Fast ausverkauft."); }
+  const avgPm = S.brews.filter(b=>b.plan>0).reduce((s,b,_,a)=>s+(b.priceMod||1)/a.length,0)||1;
+  if (avgPm > 1.22) { S.rep = clamp(S.rep-2,0,100); notes.push("Hohe Preise verärger Stammkunden."); }
+
+  // Market growth
+  const mktGrow = B.market.baseGrowthPerQ + S.rep * B.market.repGrowthFactor;
+  const verMult = S.staff.verkaeufer ? B.staff.find(r=>r.id==="verkaeufer").marketMult : 1;
+  S.marketSize = Math.min(B.market.max, S.marketSize * (1 + mktGrow * verMult));
+
+  // F&E tick
+  tickRndProjects();
+
+  // Hopfen vorrat
+  if (S.flags.hopfenvorrat > 0) S.flags.hopfenvorrat--;
+
+  // Clear temp flags
+  delete S._spoilFrac; delete S._priceWar; delete S._qualityStand; delete S._slump; delete S._consumeLager;
+
+  const totalCost = cost + S.marketing + fix;
+  const netProfit = revenue - totalCost;
+  const margin = revenue > 0 ? clamp(Math.round((netProfit/revenue)*100), -80, 90) : -80;
+  const detail = perBrew.filter(p=>p.avail>0).map(p=>`${p.name} ${p.sold}/${p.avail}`).join(" · ");
+  const cls = netProfit >= 0 ? "good" : "bad";
+  pushLog("Q"+(S.seasonIdx), `${sea} ${S.year} — ${netProfit>=0?"Gewinn":"Verlust"} ${fmt(Math.abs(netProfit))}`,
+    `Umsatz ${fmt(revenue)}, Kosten ${fmt(totalCost)}. ${detail}. ${notes.join(" ")}`, cls);
+  S.history.push({ profit: netProfit });
+  return { revenue, totalCost, netProfit, margin, soldTotal, prodTotal, leftover, cls };
+}
+
+function advanceTime() {
+  S.seasonIdx++;
+  if (S.seasonIdx > 3) { S.seasonIdx = 0; S.year++; }
+}
+
+/* ──────────────────────────────────────────────
+   RENDER
+   ────────────────────────────────────────────── */
+function render() {
+  if (!S) return;
+  document.getElementById("yearEl").textContent = S.year;
+  document.getElementById("seasonEl").textContent = season();
+  document.getElementById("diffLabel").textContent = S.diff.label;
+
+  // Ledger
+  const cashEl = document.getElementById("cashV");
+  cashEl.textContent = fmt(S.cash);
+  cashEl.className = "val mono " + (S.cash < 0 ? "neg" : "cash");
+  document.getElementById("debtV").textContent = S.debt > 0 ? "Schulden "+fmt(S.debt) : " ";
+  document.getElementById("repV").textContent = S.rep + " / 100";
+  document.getElementById("repWord").textContent = repWord(S.rep);
+  document.getElementById("capV").textContent = S.capacity+" hl";
+  document.getElementById("mktSzV").textContent = "Markt ~"+Math.round(S.marketSize)+" hl";
+  document.getElementById("fixV").textContent = fmt(fixedCost());
+
+  // Gauge
+  const q = S.lastQuarterResult;
+  const margin = q ? q.margin : 0;
+  const arc = document.getElementById("gaugeArc");
+  const pct = clamp((margin+80)/170, 0, 1);
+  arc.style.strokeDashoffset = (201*(1-pct)).toFixed(1);
+  arc.style.stroke = margin>=15?"var(--hop)":margin>=0?"var(--copper)":"var(--blood)";
+  document.getElementById("gaugeNum").textContent = (margin>0?"+":"")+margin+"%";
+  if (q) {
+    document.getElementById("gaugeHead").textContent = q.netProfit>=0?"Schwarze Zahlen":"Rote Zahlen";
+    document.getElementById("gaugeTxt").textContent = `${season()}: ${q.soldTotal}/${q.prodTotal} hl verkauft. `
+      + (q.netProfit>=0 ? `Gewinn ${fmt(q.netProfit)}.` : `Verlust ${fmt(Math.abs(q.netProfit))}.`);
+  }
+
+  // Banner
+  const banner = document.getElementById("resultBanner");
+  if (q && S.phase==="plan") {
+    banner.className = "banner "+(q.netProfit>=0?"profit":"loss");
+    banner.innerHTML = q.netProfit>=0
+      ? `Letztes Quartal <b>+${fmt(q.netProfit)}</b> · ${q.leftover} hl auf Lager.`
+      : `Letztes Quartal <b>−${fmt(Math.abs(q.netProfit))}</b> · ${q.leftover} hl blieben liegen.`;
+  } else {
+    banner.className=""; banner.innerHTML="";
+  }
+
+  document.getElementById("planPhase").classList.toggle("hidden", S.phase!=="plan");
+  document.getElementById("eventPhase").classList.toggle("hidden", S.phase!=="event");
+
+  if (S.phase === "plan")  renderPlan();
+  if (S.phase === "event") renderEvent();
+  renderLog();
+}
+
+function repWord(r) {
+  return r>=80?"geschätzt":r>=60?"etabliert":r>=40?"bekannt":r>=20?"unscheinbar":"kaum bekannt";
+}
+
+function renderPlan() {
+  renderInvestments();
+  renderBrews();
+  renderMarketing();
+  renderRnd();
+  renderDebtRepay();
+
+  const btn = document.getElementById("startQBtn");
+  const over = plannedUnits() > S.capacity;
+  btn.disabled = over;
+  btn.textContent = over ? "Über Kapazität — reduziere Produktion" : "Quartal starten →";
+  btn.onclick = startQuarter;
+}
+
+function renderInvestments() {
+  const grid = document.getElementById("investGrid");
+  grid.innerHTML = "";
+
+  // ── Buildings
+  const bSep = document.createElement("div"); bSep.className="section-sep"; bSep.textContent="Gebäude & Kapazität"; grid.appendChild(bSep);
+  for (const def of B.buildings) {
+    const owned = S.buildings.includes(def.id);
+    const reqMet = !def.requires || S.buildings.includes(def.requires);
+    const canBuy = !owned && reqMet && S.cash >= def.cost;
+    const card = document.createElement("div");
+    card.className = "inv-card" + (owned?" owned":"") + (!owned&&(!reqMet||S.cash<def.cost)?" cant":"");
+    const btnTxt = owned ? "✓ Gebaut" : "Kaufen";
+    const btnCls = owned ? "inv-btn owned-btn" : "inv-btn";
+    card.innerHTML = `<div class="ic-info">
+      <div class="ic-name">${def.name}</div>
+      <div class="ic-desc">${def.desc}</div>
+    </div>
+    <span class="ic-cost">${fmt(def.cost)}</span>
+    <button class="${btnCls}" ${owned||!canBuy?"disabled":""}>${btnTxt}</button>`;
+    if (!owned && canBuy) card.querySelector("button").onclick = () => buyBuilding(def.id);
+    grid.appendChild(card);
+  }
+
+  // ── Staff
+  const sSep = document.createElement("div"); sSep.className="section-sep"; sSep.textContent="Personal"; grid.appendChild(sSep);
+  for (const def of B.staff) {
+    const hired = !!S.staff[def.id];
+    const canHire = !hired && S.cash >= def.wage * 2;
+    const card = document.createElement("div");
+    card.className = "inv-card" + (hired?" owned":"") + (!hired&&!canHire?" cant":"");
+    const btn = hired
+      ? `<button class="inv-btn fire-btn">Entlassen</button>`
+      : `<button class="inv-btn" ${!canHire?"disabled":""}>Einstellen</button>`;
+    card.innerHTML = `<div class="ic-info">
+      <div class="ic-name">${def.name}</div>
+      <div class="ic-desc">${def.desc}</div>
+    </div>
+    <span class="ic-cost">${fmt(def.wage)}/Q</span>
+    ${btn}`;
+    const b = card.querySelector("button");
+    if (hired)  b.onclick = () => fireStaff(def.id);
+    else if (canHire) b.onclick = () => hireStaff(def.id);
+    grid.appendChild(card);
+  }
+
+  // ── Upgrades
+  const uSep = document.createElement("div"); uSep.className="section-sep"; uSep.textContent="Effizienz-Upgrades"; grid.appendChild(uSep);
+  for (const def of B.upgrades) {
+    const owned = !!S.upgrades[def.id];
+    const canBuy = !owned && S.cash >= def.cost;
+    const card = document.createElement("div");
+    card.className = "inv-card" + (owned?" owned":"") + (!owned&&S.cash<def.cost?" cant":"");
+    card.innerHTML = `<div class="ic-info">
+      <div class="ic-name">${def.name}</div>
+      <div class="ic-desc">${def.desc}</div>
+    </div>
+    <span class="ic-cost">${fmt(def.cost)}</span>
+    <button class="inv-btn ${owned?"owned-btn":""}" ${owned||!canBuy?"disabled":""}>${owned?"✓ Aktiv":"Kaufen"}</button>`;
+    if (!owned && canBuy) card.querySelector("button").onclick = () => buyUpgrade(def.id);
+    grid.appendChild(card);
+  }
+
+  // ── Credit
+  const cSep = document.createElement("div"); cSep.className="section-sep"; cSep.textContent="Kredit aufnehmen"; grid.appendChild(cSep);
+  for (const cl of B.creditLines) {
+    const rate = Math.round(cl.interestAnnual*100);
+    const card = document.createElement("div");
+    card.className = "inv-card" + (S.debt>0?" cant":"");
+    card.innerHTML = `<div class="ic-info">
+      <div class="ic-name">${fmt(cl.amount)} Investitionskredit</div>
+      <div class="ic-desc">${rate}% Jahreszins · auto-Tilgung 5%/Q</div>
+    </div>
+    <button class="inv-btn" ${S.debt>0?"disabled":""}>Aufnehmen</button>`;
+    if (!S.debt) card.querySelector("button").onclick = () => {
+      S.debt += cl.amount; S.cash += cl.amount;
+      pushLog("$","Kredit aufgenommen",`${fmt(cl.amount)} zu ${rate}% p.a.`,"");
+      render();
+    };
+    grid.appendChild(card);
+  }
+}
+
+function renderBrews() {
+  const list = document.getElementById("brewList");
+  list.innerHTML = "";
+  for (const b of S.brews) {
+    const est = estimateDemand(b);
+    const pull = b.pull[season()]||1;
+    const pullTxt = pull>=1.3?"★ Hochsaison":pull>=1.05?"gefragt":pull>=0.95?"normal":"Nebensaison";
+    let salesLine = "";
+    if (b.lastAvail !== undefined && b.lastAvail > 0) {
+      const leftover = b.lastAvail - b.lastSold;
+      const col = leftover<=0?"var(--hop-bright)":b.lastSold/b.lastAvail>=0.8?"var(--copper-bright)":"var(--blood-bright)";
+      const tag = leftover<=0?"ausverkauft":`${leftover} hl übrig`;
+      salesLine = `<span style="color:${col}">letzte Saison ${b.lastSold}/${b.lastAvail} · ${tag}</span> · `;
+    }
+    const planHint = b.plan>est+5
+      ? `<span style="color:var(--blood-bright)">Plan über Bedarf</span>`
+      : b.plan>0&&b.plan<est-5
+      ? `<span style="color:var(--hop-bright)">Bedarf nicht gedeckt</span>`
+      : "passend";
+    let badges = "";
+    if (b.rarity==="legend") badges += `<span class="badge legend">Kult</span>`;
+    else if (b.rarity==="rare") badges += `<span class="badge rare">Eigenkreation</span>`;
+    if (b.traitLabels) b.traitLabels.forEach(t=>badges+=`<span class="badge trait">${t}</span>`);
+    const pm = b.priceMod||1;
+    const effPrice = Math.round(b.basePrice*pm);
+    const pmPct = Math.round((pm-1)*100);
+    const pmTxt = pmPct===0?"Normalpreis":pmPct>0?`+${pmPct}%`:`${pmPct}%`;
+    const pmCol = pmPct>18?"var(--blood-bright)":pmPct<0?"var(--copper-bright)":"var(--hop-bright)";
+    const row = document.createElement("div");
+    row.className = "brew-row"; row.dataset.bid = b.id;
+    row.innerHTML = `<div class="brew-main">
+      <div class="brew-swatch" style="background:${b.color}"></div>
+      <div class="brew-info">
+        <div class="brew-name">${b.name} ${badges}</div>
+        <div class="brew-meta est">${fmt(effPrice)}/hl · <span style="color:var(--hop-bright)">${pullTxt}</span> · ~${est} hl · ${planHint}</div>
+        <div class="brew-meta">${salesLine || "&nbsp;"}</div>
+      </div>
+      <div class="brew-qty">
+        <button data-bid="${b.id}" data-d="-4">−</button>
+        <span class="n">${b.plan}</span>
+        <button data-bid="${b.id}" data-d="4">+</button>
+      </div>
+    </div>
+    <div class="price-row">
+      <span class="pl">Preis</span>
+      <input type="range" class="pslider" data-bid="${b.id}" min="0.8" max="1.3" step="0.05" value="${pm}">
+      <span class="pv" style="color:${pmCol}">${fmt(effPrice)} · ${pmTxt}</span>
+    </div>`;
+    list.appendChild(row);
+  }
+
+  list.querySelectorAll("button").forEach(btn => {
+    btn.onclick = () => {
+      const b = S.brews.find(x=>x.id===btn.dataset.bid);
+      const d = +btn.dataset.d;
+      b.plan = clamp(b.plan+d, 0, 400);
+      if (plannedUnits() > S.capacity && d > 0) b.plan = clamp(b.plan-d, 0, 400);
+      renderBrews();
+      updateProdFoot();
+    };
+  });
+
+  list.querySelectorAll(".pslider").forEach(sl => {
+    sl.oninput = () => {
+      const b = S.brews.find(x=>x.id===sl.dataset.bid);
+      b.priceMod = +sl.value;
+      const row = sl.closest(".brew-row");
+      const pm = b.priceMod; const effPrice = Math.round(b.basePrice*pm);
+      const pmPct = Math.round((pm-1)*100);
+      const pmTxt = pmPct===0?"Normalpreis":pmPct>0?`+${pmPct}%`:`${pmPct}%`;
+      row.querySelector(".pv").textContent = `${fmt(effPrice)} · ${pmTxt}`;
+      row.querySelector(".pv").style.color = pmPct>18?"var(--blood-bright)":pmPct<0?"var(--copper-bright)":"var(--hop-bright)";
+      row.querySelector(".est").innerHTML = `${fmt(effPrice)}/hl · <span style="color:var(--hop-bright)">${
+        (b.pull[season()]||1)>=1.3?"★ Hochsaison":(b.pull[season()]||1)>=1.05?"gefragt":"normal"
+      }</span> · ~${estimateDemand(b)} hl`;
+    };
+  });
+
+  updateProdFoot();
+}
+
+function updateProdFoot() {
+  document.getElementById("pfCap").textContent = S.capacity;
+  const p = plannedUnits();
+  const pe = document.getElementById("pfPlan"); pe.textContent = p;
+  pe.className = p > S.capacity ? "over" : "";
+  document.getElementById("pfCost").textContent = fmt(brewCostTotal());
+}
+
+function renderMarketing() {
+  const mkt = document.getElementById("mkt");
+  mkt.value = S.marketing;
+  document.getElementById("mktV").textContent = fmt(S.marketing);
+  mkt.oninput = () => {
+    S.marketing = +mkt.value;
+    document.getElementById("mktV").textContent = fmt(S.marketing);
+    document.getElementById("mktCap").textContent = mktCapText();
+  };
+  document.getElementById("mktCap").textContent = mktCapText();
+}
+
+function mktCapText() {
+  if (S.marketing === 0) return "Kein Marketing — Nachfrage nur über Ruf und Stammkundschaft.";
+  const boost = Math.round(S.marketing/15000*100);
+  return `Schätzt Nachfrage-Schub ca. +${boost}%. Bei Liquiditätsdruck hier sparen.`;
+}
+
+function renderRnd() {
+  const el = document.getElementById("rndContent");
+  el.innerHTML = "";
+  // Active projects
+  for (const p of S.rndProjects) {
+    const div = document.createElement("div");
+    div.className = "rnd-project";
+    div.innerHTML = `<div class="rp-name">„${p.name}"</div>
+      <div class="rp-prog">Noch ${p.quartersLeft} Quartal${p.quartersLeft>1?"e":""} · ${fmt(B.rnd.costPerQ)}/Q laufend</div>`;
+    el.appendChild(div);
+  }
+  if (S.rndProjects.length > 0) return;
+
+  // Start a new project
+  const p = document.createElement("p");
+  p.style.cssText = "font-size:12px;color:var(--paper-faint);margin-bottom:8px;font-family:'Courier New',monospace";
+  p.textContent = `3 Quartale · ${fmt(B.rnd.costPerQ)}/Q · Ausmaß der Qualität variiert leicht${S.upgrades.labor?" (Labor: enger, besser)":""}`;
+  el.appendChild(p);
+
+  const dirs = document.createElement("div");
+  dirs.className = "rnd-dir";
+  for (const dir of RND_DIRS) {
+    const btn = document.createElement("button");
+    btn.textContent = dir.name + " — " + dir.desc;
+    btn.className = S.rndDir===dir.id ? "sel" : "";
+    btn.onclick = () => {
+      S.rndDir = dir.id;
+      renderRnd();
+    };
+    dirs.appendChild(btn);
+  }
+  el.appendChild(dirs);
+
+  if (S.rndDir) {
+    const enough = S.cash >= B.rnd.costPerQ * 2;
+    const startBtn = document.createElement("button");
+    startBtn.className = "btn-ghost";
+    startBtn.style.marginTop = "8px";
+    startBtn.disabled = !enough;
+    startBtn.textContent = enough
+      ? `Projekt starten (${fmt(B.rnd.costPerQ)}/Q × 3)`
+      : `Zu wenig Bargeld (mind. ${fmt(B.rnd.costPerQ * 2)} Reserve)`;
+    startBtn.onclick = () => startRndProject(S.rndDir);
+    el.appendChild(startBtn);
+  }
+}
+
+function renderDebtRepay() {
+  const panel = document.getElementById("debtRepayPanel");
+  if (S.debt <= 0) { panel.classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+  document.getElementById("debtRepayHint").innerHTML = `offen ${fmt(S.debt)} · 9% Zins p.a.`;
+  const maxPay = Math.floor(Math.min(S.debt, Math.max(0, S.cash-2000)) / 500) * 500;
+  const sl = document.getElementById("repay");
+  sl.max = maxPay; if (+sl.value > maxPay) sl.value = maxPay;
+  const upd = () => {
+    const v = +sl.value;
+    document.getElementById("repayV").textContent = fmt(v);
+    const savedInt = Math.round(v*0.09/4);
+    document.getElementById("repayCap").textContent = v>0
+      ? `Spart rund ${fmt(savedInt)} Zins/Q. Restschuld danach ${fmt(S.debt-v)}.`
+      : "Freiwillige Sonderzahlung über die automatische Tilgung hinaus.";
+    document.getElementById("repayBtn").disabled = v<=0;
+  };
+  sl.oninput = upd; upd();
+  document.getElementById("repayBtn").onclick = () => {
+    const v = +document.getElementById("repay").value;
+    if (v<=0||v>S.cash) return;
+    S.cash -= v; S.debt = Math.max(0, S.debt-v);
+    pushLog("$","Sonderzahlung",`${fmt(v)} getilgt. Restschuld ${fmt(S.debt)}.`,"good");
+    render();
+  };
+}
+
+function renderEvent() {
+  const ev = S.currentEvent;
+  const card = document.getElementById("eventCard");
+  card.className = "panel event" + (ev.crisis?" crisis":ev.risk?" risk":"");
+  document.getElementById("eventTag").textContent = ev.tag;
+  document.getElementById("eventTitle").textContent = ev.title;
+  document.getElementById("eventDesc").textContent = ev.desc;
+  const cont = document.getElementById("eventChoices"); cont.innerHTML="";
+  ev.choices.forEach((c,i) => {
+    const btn = document.createElement("button"); btn.className="choice";
+    btn.innerHTML = `<span class="clab">${c.lab}</span><span class="codds">${c.odds||""}</span>`;
+    btn.onclick = () => chooseEvent(i);
+    cont.appendChild(btn);
+  });
+}
+
+function renderLog() {
+  const el = document.getElementById("log"); el.innerHTML="";
+  for (const e of S.log) {
+    const d = document.createElement("div"); d.className = "entry "+(e.cls||"");
+    d.innerHTML = `<span class="q">${e.q}</span><span class="t"><b>${e.title}.</b> ${e.text}</span>`;
+    el.appendChild(d);
+  }
+}
+
+/* ──────────────────────────────────────────────
+   START / END
+   ────────────────────────────────────────────── */
+const overlay = document.getElementById("overlay");
+const modal   = document.getElementById("modal");
+
+function showStart() {
+  modal.innerHTML = `<h1>Stadtbräu</h1>
+    <div class="tagline">Mikrobrauerei · Uster</div>
+    <p>Führe eine kleine Brauerei durch <b>${B.start.goalYears} Jahre</b>. Jedes Quartal: investiere in Kapazität, Personal und Upgrades — dann produziere, vermarkte und triff eine Ereignis-Entscheidung. <b>Fixkosten laufen immer mit</b> — wer zu schnell wächst, blutet.</p>
+    <p><b>Sieg:</b> ${B.start.goalYears} Jahre profitabel überstehen. <b>Pleite</b> bei Bargeld unter ${fmt(B.start.loseThreshold)}.</p>
+    <p style="text-align:center;color:var(--copper-bright);font-family:'Courier New',monospace;font-size:11px;letter-spacing:1.5px;margin-top:4px">SCHWIERIGKEIT WÄHLEN</p>
+    <div class="diff-btns">
+      <button class="btn-ghost" data-d="easy">Sanft</button>
+      <button class="btn-ghost" data-d="std">Standard</button>
+      <button class="btn-ghost" data-d="hard">Hart</button>
+    </div>`;
+  overlay.classList.remove("hidden");
+  modal.querySelectorAll("button[data-d]").forEach(b => b.onclick = () => {
+    overlay.classList.add("hidden");
+    newGame(b.dataset.d);
+  });
+}
+
+function gameOver(won) {
+  const total = S.history.reduce((s,h)=>s+h.profit,0);
+  const cultCount = S.brews.filter(b=>b.rarity==="legend").length;
+  let head, sub;
+  if (!won) {
+    head = `<h1 style="color:var(--blood-bright)">Zahlungsunfähig</h1><div class="tagline">Jahr ${S.year}, ${season()}</div>`;
+    sub = "<p>Das Bargeld ist aufgebraucht. Fixkosten und Produktion sind aus dem Takt geraten.</p>";
+  } else {
+    const g = S.cash>80000?"Eine kleine Dynastiegründung.":S.cash>40000?"Solide gewirtschaftet.":"Knapp überlebt.";
+    head = `<h1 style="color:var(--hop-bright)">${B.start.goalYears} Jahre geschafft</h1><div class="tagline">${g}</div>`;
+    sub = "<p>Du hast die Brauerei durch Saisons, Pannen und knappem Budget geführt.</p>";
+  }
+  modal.innerHTML = head + sub + `
+    <div class="score-box">
+      <div>Endkapital: <b>${fmt(S.cash)}</b></div>
+      <div>Schulden: ${fmt(S.debt)}</div>
+      <div>Gesamtprofit: <b>${(total>=0?"+":"")}${fmt(total)}</b></div>
+      <div>Ruf: ${S.rep} / 100 (${repWord(S.rep)})</div>
+      <div>Eigenkreationen: ${S.brews.length-3} · Kultsorten: ${cultCount}</div>
+      <div>Kapazität: ${S.capacity} hl · Markt: ~${Math.round(S.marketSize)} hl</div>
+    </div>
+    <button class="btn-primary" id="restartBtn">Neue Brauerei</button>`;
+  overlay.classList.remove("hidden");
+  document.getElementById("restartBtn").onclick = () => { overlay.classList.add("hidden"); showStart(); };
+}
+
+/* ── INIT ── */
+showStart();
+</script>
+</body>
+</html>
