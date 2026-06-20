@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Stadtbräu — Mikrobrauerei-Manager</title>
+<title>non-zero — Mikrobrauerei-Manager</title>
 <style>
   :root{
     --malt:#1c1410;--malt2:#241a14;--malt3:#2e2118;--malt4:#38291e;
@@ -185,7 +185,7 @@
 <div class="wrap">
 
   <header>
-    <div><div class="brand">Stadtbräu<small>Mikrobrauerei · Uster</small></div></div>
+    <div><div class="brand">non-zero<small>Mikrobrauerei · Uster</small></div></div>
     <div class="period">
       <div class="diff-badge" id="diffLabel">Standard</div>
       <div>Jahr <span id="yearEl">1</span> · <b id="seasonEl">Frühling</b></div>
@@ -1148,7 +1148,7 @@ const overlay = document.getElementById("overlay");
 const modal   = document.getElementById("modal");
 
 function showStart() {
-  modal.innerHTML = `<h1>Stadtbräu</h1>
+  modal.innerHTML = `<h1>non-zero</h1>
     <div class="tagline">Mikrobrauerei · Uster</div>
     <p>Führe eine kleine Brauerei durch <b>${B.start.goalYears} Jahre</b>. Jedes Quartal: investiere in Kapazität, Personal und Upgrades — dann produziere, vermarkte und triff eine Ereignis-Entscheidung. <b>Fixkosten laufen immer mit</b> — wer zu schnell wächst, blutet.</p>
     <p><b>Sieg:</b> ${B.start.goalYears} Jahre profitabel überstehen. <b>Pleite</b> bei Bargeld unter ${fmt(B.start.loseThreshold)}.</p>
