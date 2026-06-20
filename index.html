@@ -298,9 +298,9 @@ const B = {
   start: { cash: 25000, capacity: 60, rep: 48, marketSize: 80, debt: 0, goalYears: 7, loseThreshold: -6000 },
   fixedCosts: { baseOverhead: 1200, perCapacityHl: 15 },
   buildings: [
-    { id:"gaertank",  name:"Gärtank-Erweiterung", cost:14000, capAdd:40, fixPerQ:0,   desc:"+ 40 hl Kapazität" },
-    { id:"abfuell",   name:"Abfüllstraße",         cost:22000, capAdd:60, fixPerQ:0,   desc:"+ 60 hl · setzt Gärtank voraus", requires:"gaertank" },
-    { id:"halle2",    name:"Zweite Halle",          cost:40000, capAdd:120,fixPerQ:0,   desc:"+ 120 hl · setzt Abfüllstraße voraus", requires:"abfuell" },
+    { id:"gaertank",  name:"Gärtank-Erweiterung", cost:14000, capAdd:40, fixPerQ:1500, desc:"+ 40 hl · CHF 1'500/Q Fixkosten" },
+    { id:"abfuell",   name:"Abfüllstraße",         cost:22000, capAdd:60, fixPerQ:2200, desc:"+ 60 hl · CHF 2'200/Q · braucht Gärtank", requires:"gaertank" },
+    { id:"halle2",    name:"Zweite Halle",          cost:40000, capAdd:120,fixPerQ:3500, desc:"+ 120 hl · CHF 3'500/Q · braucht Abfüllstraße", requires:"abfuell" },
   ],
   staff: [
     { id:"braumeister",name:"Braumeister",  wage:2400, desc:"Qualität ×1.15 · Ruf +1/Q",    qualityMult:1.15, repPerQ:1 },
@@ -493,6 +493,7 @@ const season = () => SEASONS[S.seasonIdx];
 
 function fixedCost() {
   let f = B.fixedCosts.baseOverhead + B.fixedCosts.perCapacityHl * S.capacity;
+  for (const id of S.buildings) { const b = B.buildings.find(x=>x.id===id); if (b) f += b.fixPerQ; }
   for (const r of B.staff) if (S.staff[r.id]) f += r.wage;
   for (const p of S.rndProjects) f += B.rnd.costPerQ;
   const upgEff = S.upgrades.energie ? B.upgrades.find(u=>u.id==="energie").fixMult : 1;
