@@ -6,29 +6,14 @@
 
 ---
 
-## #1 — Gärtank ist ein No-Brainer (Fixkostenfalle deaktiviert) · ✅ HEBEL 1 UMGESETZT (2026-06-20)
+## #1 — Gärtank ist ein No-Brainer (Fixkostenfalle deaktiviert) · ✅ HEBEL 1 UMGESETZT
 
-**Status:** Bug behoben + Hebel 1 angewandt. Hebel 2 bewusst zurückgestellt (siehe unten).
-Testkriterium noch durch mehrere Durchläufe zu bestätigen.
-
-**Was umgesetzt wurde:**
-- *Bug:* `fixedCost()` las `fixPerQ` nie aus — jetzt werden die `fixPerQ` aller gebauten
-  Gebäude aufsummiert (`for (id of S.buildings) f += B.buildings.find(...).fixPerQ`).
-- *Werte (Hebel 1, wie vorgeschlagen):* Gärtank `1500`, Abfüllstraße `2200`, Halle2 `3500`.
-- *Transparenz:* Die laufenden Fixkosten stehen jetzt in der Gebäude-Beschreibung im UI.
-- *Verifiziert:* Tank-Bau hebt Fixkosten 2'100 → 4'200/Q (+2'100 marginal). Leerer Tank
-  blutet −2'100/Q; bei voller Auslastung (Lager, DB 150) Amortisation ~3,5 Q. Energie-Upgrade
-  (×0.85) greift korrekt auf die Gesamtsumme inkl. Gebäude.
-
-**Bewusst NICHT gemacht — Hebel 2 (`perCapacityHl` 15→28):** zurückgestellt, um „eine Änderung,
-dann testen" einzuhalten. Hebel 2 verschärft das ganze Frühspiel (Start-Fix 2'100→2'880/Q), nicht
-nur den Tank-No-Brainer — eine separate Stellschraube. Erst greifen, falls der Tank nach
-Durchläufen WEITERHIN immer sofort gebaut wird.
-
-**Nächster Schritt:** 2–3 Durchläufe auf „Standard" + „Hart". Prüfen: Gibt es Situationen, in
-denen „Gärtank noch NICHT bauen" richtig ist? Falls Tank weiter risikolos → Hebel 2 nachlegen.
-
----
+**Status (2026-06-20):** Bug behoben + Hebel 1 angewandt. `fixedCost()` summiert jetzt die
+`fixPerQ` aller gebauten Gebäude (war read-but-never-charged). Werte: Gärtank 1500, Abfüll 2200,
+Halle2 3500. Verifiziert: leerer Tank blutet −2'100/Q, voll ausgelastet Amortisation ~3,5 Q.
+**Hebel 2 (`perCapacityHl` 15→28) bewusst zurückgestellt** — er verschärft das ganze Frühspiel,
+nicht nur den Tank-No-Brainer; greift erst, falls #2 (Markt als Bremse) nicht reicht. Noch durch
+mehrere Durchläufe zu bestätigen.
 
 **Problem (durch Spielen entdeckt, mit Zahlen bestätigt):**
 Der erste Ausbau wird immer sofort gebaut, sobald Geld da ist — also ist es keine
@@ -69,7 +54,107 @@ und „Hart" spielen. Nicht überdrehen — Ausbau muss attraktiv BLEIBEN, nur n
 
 ---
 
-## #2 — `balance.json` vs. `const B` konsolidieren · PRIORITÄT MITTEL
+## #2 — Ausbaupfad zu kurz, Kapazität als Sackgasse · ✅ TEIL A + B UMGESETZT
+
+**Status (2026-06-20):**
+- *Teil A — wiederholbarer Ausbau:* Nach „Zweite Halle" gibt es einen kaufbaren „Weiterer
+  Gärtank" (+40 hl), jeder teurer (×1.4) und mit höheren Fixkosten (×1.4) als der vorige.
+  `B.expansion` + `buyExtraTank()` + `extraTankFixTotal()`. Es gibt jetzt IMMER eine nächste,
+  zunehmend riskantere Ausbau-Entscheidung. Verifiziert: Kosten 16k/22.4k/31.4k, Fix 1500/2100/2940.
+- *Teil B — Markt als Bremse:* `B.market.max` 600→1000. Nachfrage skaliert mit `marketSize`
+  (bereits im Modell). Verifiziert: ohne Verkäufer/mittlerer Ruf wächst der Markt nur auf ~378 hl
+  (Überbau blutet), mit Verkäufer+gutem Ruf bis 1000 (Expansion lohnt sich) → die Grenze ist die
+  genährte Nachfrage, keine harte hl-Wand.
+- *Teil C:* erfüllt durch #1 (Fixkosten scharf).
+- **Offen:** 2–3 Durchläufe auf Standard/Hart spielen. Prüfen, ob der Markt mit Verkäufer zu
+  leicht ans Maximum kommt (ggf. `repGrowthFactor` oder `max` senken) und ob „nicht weiter
+  ausbauen" sich je richtig anfühlt.
+
+**Problem (durch Spielen entdeckt, mit Zahlen bestätigt):**
+Man kommt schnell an die Maximalkapazität und lässt dann nur noch durchlaufen — die zweite
+Spielhälfte hat keine Ausbau-Entscheidung mehr. Das tötet die zentrale Spannung („worin
+investiere ich als Nächstes") für den Rest der Partie.
+
+**Warum (Belegrechnung mit aktuellen Werten in `B`):**
+- Nur 3 Ausbaustufen: 60 → 100 → 160 → 280 hl. Danach ist `S.capacity` hart gedeckelt.
+- Spieldauer 7 Jahre = 28 Quartale, aber Ausbaupfad nach 3 Käufen erschöpft.
+- `B.market.max` = 600 hl: Der Markt kann auf 600 wachsen, die Produktion bleibt bei 280 —
+  Kapazität wird zur harten Wand ohne Ausweg, statt zu einer Wette.
+- Verzahnt mit #1: Weil Ausbau billig/risikolos ist, ist man auch noch SCHNELL oben.
+  → #1 und #2 zusammen umsetzen, sie betreffen dieselbe Mechanik von zwei Seiten.
+
+**Fix — drei Teile:**
+
+*Teil A — Ausbaupfad verlängern & öffnen.*
+- Entweder 5–6 feste Stufen statt 3, ODER (eleganter) ein **wiederholbarer Ausbau** am Ende:
+  ab der letzten festen Stufe weitere Gärtanks kaufbar, jeder teurer und mit mehr `fixPerQ`
+  als der vorige (z. B. Kosten ×1.4, fixPerQ ×1.4 pro Wiederholung).
+- Wirkung: Es gibt IMMER eine nächste Ausbau-Entscheidung — aber zunehmend riskanter.
+
+*Teil B — Markt als Bremse statt Kapazität als Wand.*
+- Die eigentliche Grenze soll die NACHFRAGE sein, nicht eine harte hl-Wand. Ausbau über den
+  Marktbedarf hinaus bringt nichts ein, kostet aber Fixkosten.
+- Dann ist das Gefühl nicht „ich stoße an die Wand", sondern „lohnt sich der nächste Ausbau
+  für den Markt, den ich habe / wachsen lassen kann?" — genau die Wette aus GAME_DESIGN §7.
+- Ggf. `B.market.max` anheben oder dynamisch an Ruf/Präsenz koppeln, damit Wachstum sich lohnt.
+
+*Teil C — gemeinsam mit #1 (Fixkosten scharf).*
+- Erst mit echten Ausbau-Fixkosten (#1) wird „weiter ausbauen?" eine ehrliche Frage statt
+  Automatismus. A + B + #1 ergeben zusammen: langsamer hochkommen, immer eine nächste
+  Entscheidung, und Überexpansion wird bestraft.
+
+**Testkriterium:** Gibt es in der zweiten Spielhälfte (Quartal 14+) noch echte
+Investitions-Entscheidungen? Fühlt sich „nicht weiter ausbauen" je als richtige Wahl an?
+Wenn man weiterhin nur durchlaufen lässt, Werte nachschärfen.
+
+**Vorsicht:** Nicht ins Gegenteil kippen — Ausbau muss erreichbar und lohnend BLEIBEN, nur
+nicht endlich/risikolos. Nach Änderung 2–3 Durchläufe auf Standard und Hart.
+
+---
+
+## #3 — Event-System: kontextgetriggert statt rein zufällig · PRIORITÄT MITTEL-HOCH
+
+**Problem:** Es braucht viel mehr Entscheidungsfragen. Aktuell ~10 handgeschriebene Events,
+rein zufällig gezogen — dasselbe Event kann in Quartal 2 und Quartal 25 kommen, obwohl die
+Spielsituation völlig anders ist. Nach wenigen Partien sind alle bekannt.
+
+**Verworfene Alternative — rein generisch/prozedural.** Aus Bausteinen zusammengewürfelte
+Events („[Akteur] bietet [Ware] zu [Bedingung]") sind praktisch unendlich, fühlen sich aber
+generisch an, haben keine Pointe und erzeugen oft unsinnige/triviale Kombinationen. Quantität
+auf Kosten von Bedeutung — das Gegenteil dessen, was wir wollen. NICHT diesen Weg gehen.
+
+**Gewählter Ansatz — kontextgetriggerte handgeschriebene Events.** Events bleiben handgemacht
+(Charakter, gute Texte, durchdachte Trade-offs), werden aber NICHT rein zufällig gezogen,
+sondern an Spielzustände geknüpft. Drei Bausteine:
+
+1. **`condition`-Feld pro Event** (Funktion, die den Spielzustand prüft): Spielphase/Jahr,
+   Auslastung, Schuldenstand, Ruf, Kapazität, ob Konkurrent existiert. Die Engine zieht nur
+   aus dem Pool gerade GÜLTIGER Events. Wirkung: Dasselbe Spiel sieht je nach Spielstil andere
+   Events — die Welt reagiert auf dich. Deckt sich mit GAME_DESIGN §6 (Events testen frühere
+   Entscheidungen, brechen nicht zufällig herein).
+2. **Wertskalierung:** Hülle handgeschrieben, Zahlen (Mengen, Preise) skalieren mit der
+   aktuellen Spielgrösse, damit ein Event in Quartal 25 nicht trivial wird. Kontrollierte
+   Generik — Variation in den Werten, Bedeutung in der Struktur.
+3. **Mehr Events:** Ziel ~25–30 statt 10, damit eine Partie (28 Q) nicht alle sieht.
+
+**Struktur:** Passt zur `B`/Daten-Logik-Trennung. Event = Daten-Objekt mit `condition`-Funktion.
+Neues Event = ein Listeneintrag mit Bedingung. Engine filtert Pool, dann Zufallszug aus dem
+gefilterten Pool (weiterhin „lastEvent nicht wiederholen").
+
+**Arbeitsteilung (festgehalten):**
+- Event-TEXTE & Trade-offs: kreative Substanz, im Dialog mit Claude (Ton, Balance, welche
+  Spannung jedes Event testet). Ein erster Satz von ~6–8 Muster-Events dient als Vorlage.
+- Trigger-SYSTEM & Integration (`condition`-Felder, Pool-Filter, Wertskalierung): Code-Arbeit
+  in Claude Code, dort testen und spielen.
+
+**Reihenfolge-Hinweis:** ERST #1 und #2 austarieren (Fixkosten, Ausbaupfad). Solange der
+Kern-Loop nicht sitzt, ist unklar, wie sich die Spielphasen anfühlen, an die Events getriggert
+werden — 30 Events vorher zu schreiben wäre Inhalt vor Fundament. Muster-Events können schon
+existieren; die volle Menge kommt, wenn der Kern steht.
+
+---
+
+## #4 — `balance.json` vs. `const B` konsolidieren · PRIORITÄT MITTEL
 
 Es gibt zwei Quellen für Zahlen: das frühe `balance.json` und das gelebte `const B` in
 `index.html`. Doppelte Wahrheit ist eine Fehlerquelle. Entscheiden:
@@ -79,12 +164,35 @@ Für die schlanke Einzeldatei-Phase ist Variante 1 (nur `B`) wahrscheinlich rich
 
 ---
 
-## #3 — Weitere Balancing-Fragen (aus GAME_DESIGN §9, durch Spielen zu klären)
+## #5 — Weitere Balancing-Fragen (aus GAME_DESIGN §9, durch Spielen zu klären)
 
 - Ist eine Investitionsstrategie immer optimal? Personal/Upgrades/F&E gegeneinander prüfen.
 - Wächst die Marktgröße so, dass Expansion sich lohnt, aber Überexpansion bestraft wird?
 - Killt die Zinslast bei Vollverschuldung das Spiel zu hart oder zu lasch?
 - F&E: Lohnt sich der mehrquartalige Einsatz gegenüber direktem Kapazitätsausbau?
+
+---
+
+## #6 — Produktionskette als spätere Desktop-Tiefe (von Beer Factory gelernt) · GEPARKT
+
+Vergleichsobjekt: *Beer Factory* (Steam, MyceliumGames, 2024) — 3D-Fabriksimulator,
+Rohstoff → Brauen → Abfüllen → Liefern, Mitarbeiter-Aufgabenzuteilung, „realistische"
+Wirtschaft mit Steuern/Transport.
+
+**Wichtigste Lektion (Warnung, nicht Vorbild):** Trotz voller Ausstattung und kommerziellem
+Studio nur **41% positiv (Mixed, 1'401 Reviews)**. → Tiefe und Realismus allein machen kein
+gutes Spiel. Bestätigt unseren Kurs: Spannung aus Design, nicht aus Systemmenge. Der Markt
+generischer „verwalte-eine-X-Fabrik"-Simulatoren ist gesättigt und mittelmäßig bewertet.
+
+**Was übernehmenswert ist (nur als spätere DESKTOP-Ausbaustufe, NICHT mobil):**
+- Mehrstufige Produktionskette als Tiefenquelle: aktuell ist Produktion eine Zahl (hl).
+  Eine 2–3-stufige Kette (z. B. Rohstoff → Sud → Abfüllung) mit einem Engpass dazwischen
+  könnte echte neue Knappheit schaffen.
+
+**Was bewusst NICHT übernehmen:** 3D, First-Person, Logistik-Mikromanagement, „so realistisch
+wie möglich". Für mobile-first zu schwer; und 41% zeigen, dass es selbst gut gemacht nicht
+trägt. Unser Vorteil ist der *Standpunkt* (Wachstum vs. Kooperation), den ein generischer
+Fabriksimulator nicht hat — das ist das Differenzierungsmerkmal, nicht der Realismus.
 
 ---
 

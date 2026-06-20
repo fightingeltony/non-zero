@@ -326,6 +326,8 @@ const B = {
     { id:"abfuell",   name:"Abfüllstraße",         cost:22000, capAdd:60, fixPerQ:2200, desc:"+ 60 hl · CHF 2'200/Q · braucht Gärtank", requires:"gaertank" },
     { id:"halle2",    name:"Zweite Halle",          cost:40000, capAdd:120,fixPerQ:3500, desc:"+ 120 hl · CHF 3'500/Q · braucht Abfüllstraße", requires:"abfuell" },
   ],
+  // Wiederholbarer Ausbau nach Halle2 (#2 Teil A): jeder weitere Tank teurer + höhere Fixkosten.
+  expansion: { name:"Weiterer Gärtank", capAdd:40, baseCost:16000, baseFix:1500, costMult:1.4, fixMult:1.4, requires:"halle2" },
   staff: [
     { id:"braumeister",name:"Braumeister",  wage:2400, desc:"Qualität ×1.15 · Ruf +1/Q",    qualityMult:1.15, repPerQ:1 },
     { id:"verkaeufer", name:"Verkäufer",    wage:2000, desc:"Marktwachstum ×1.4",             marketMult:1.4 },
@@ -340,7 +342,7 @@ const B = {
     { amount:15000, interestAnnual:0.09 },
     { amount:30000, interestAnnual:0.11 },
   ],
-  market: { baseGrowthPerQ:0.022, repGrowthFactor:0.0007, max:600 },
+  market: { baseGrowthPerQ:0.022, repGrowthFactor:0.0007, max:1000 },
   demand: { repBase:0.5, repPerPoint:0.005, priceElasticity:1.4, spread:[0.82,1.18] },
   rnd: { costPerQ:2500, durationQ:3, qualitySpread:[0.88,1.12] },
   seasons: { Frühling:1.05, Sommer:1.25, Herbst:1.0, Winter:0.85 },
@@ -498,6 +500,7 @@ function newGame(diffKey) {
     upgrades: {},
     rndProjects: [],
     rndDir: null,
+    extraTanks: 0,
     phase: "plan",
     tab: "bauen",
     flags: {}, log: [], history: [],
@@ -516,9 +519,19 @@ const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 const rnd  = (a,b) => a + Math.random() * (b - a);
 const season = () => SEASONS[S.seasonIdx];
 
+function extraTankFixTotal() {
+  // Summe der Fixkosten aller wiederholbaren Zusatz-Tanks (jeder ×fixMult teurer als der vorige).
+  const e = B.expansion; let sum = 0;
+  for (let n = 0; n < (S.extraTanks||0); n++) sum += Math.round(e.baseFix * Math.pow(e.fixMult, n));
+  return sum;
+}
+function nextTankCost() { return Math.round(B.expansion.baseCost * Math.pow(B.expansion.costMult, S.extraTanks||0)); }
+function nextTankFix()  { return Math.round(B.expansion.baseFix  * Math.pow(B.expansion.fixMult,  S.extraTanks||0)); }
+
 function fixedCost() {
   let f = B.fixedCosts.baseOverhead + B.fixedCosts.perCapacityHl * S.capacity;
   for (const id of S.buildings) { const b = B.buildings.find(x=>x.id===id); if (b) f += b.fixPerQ; }
+  f += extraTankFixTotal();
   for (const r of B.staff) if (S.staff[r.id]) f += r.wage;
   for (const p of S.rndProjects) f += B.rnd.costPerQ;
   const upgEff = S.upgrades.energie ? B.upgrades.find(u=>u.id==="energie").fixMult : 1;
@@ -566,6 +579,17 @@ function buyBuilding(id, free=false) {
   S.buildings.push(id);
   S.capacity += def.capAdd;
   pushLog("BAU", def.name, `Kapazität +${def.capAdd} hl. Neu: ${S.capacity} hl.`, "good");
+  render();
+}
+
+function buyExtraTank() {
+  const cost = nextTankCost();
+  const addedFix = nextTankFix();
+  if (S.cash < cost) return;
+  S.cash -= cost;
+  S.capacity += B.expansion.capAdd;
+  S.extraTanks = (S.extraTanks||0) + 1;
+  pushLog("BAU", `${B.expansion.name} #${S.extraTanks}`, `Kapazität +${B.expansion.capAdd} hl (jetzt ${S.capacity} hl) · Fixkosten +${fmt(addedFix)}/Q.`, "good");
   render();
 }
 
@@ -922,6 +946,23 @@ function renderInvestments() {
     grid.appendChild(card);
   }
 
+  // Wiederholbarer Ausbau (#2 Teil A) — nur nach Halle2
+  if (S.buildings.includes(B.expansion.requires)) {
+    const cost = nextTankCost();
+    const addFix = nextTankFix();
+    const canBuy = S.cash >= cost;
+    const card = document.createElement("div");
+    card.className = "inv-card" + (!canBuy?" cant":"");
+    card.innerHTML = `<div class="ic-info">
+      <div class="ic-name">${B.expansion.name}${S.extraTanks?` <span style="color:var(--dim);font-weight:400">#${S.extraTanks+1}</span>`:""}</div>
+      <div class="ic-desc">+ ${B.expansion.capAdd} hl · ${fmt(addFix)}/Q · jeder weitere teurer</div>
+    </div>
+    <span class="ic-cost">${fmt(cost)}</span>
+    <button class="inv-btn" ${!canBuy?"disabled":""}>Bauen</button>`;
+    if (canBuy) card.querySelector("button").onclick = () => buyExtraTank();
+    grid.appendChild(card);
+  }
+
   // Staff
   addSep("Personal");
   for (const def of B.staff) {
@@ -1217,7 +1258,7 @@ function showStart() {
   const cont = document.getElementById("continueBtn");
   if (cont) cont.onclick = () => {
     const saved = loadGame(); if (!saved) return;
-    S = saved; if (!S.tab) S.tab = "bauen";
+    S = saved; if (!S.tab) S.tab = "bauen"; if (S.extraTanks == null) S.extraTanks = 0;
     overlay.classList.add("hidden");
     document.getElementById("menuBtn").classList.remove("hidden");
     render();

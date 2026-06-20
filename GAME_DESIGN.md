@@ -23,7 +23,7 @@ Das Setting ist bewusst gewählt, nicht beliebig.
 klare Saisonalität, greifbares Produkt, anschauliche Expansion. Zahlen fühlen sich nach
 etwas an, statt abstrakt zu bleiben.
 
-**Für die spätere Kooperations-Achse (§7b) ist das Setting bewusst *ungünstig* — und
+**Für die spätere Kooperations-Achse (§7c) ist das Setting bewusst *ungünstig* — und
 genau das ist der Punkt.** Bier ist ein rivalisierendes Gut: jeder verkaufte Hektoliter
 ist einem anderen weggetrunken. Das Setting flüstert Game-A-Logik. Ein Setting mit
 eingebauter Allmende (Energiegenossenschaft, Wissens-Commons) würde Kooperation leicht
@@ -61,7 +61,7 @@ einem Handy. Darum:
 - In zwei Minuten verständlich, ohne Anleitung.
 
 **Die Kooperations-Pointe rückt nach vorne.** Für eine *These* (Monopol vs. Kooperation,
-§7b) ist ein schlankes, verbreitbares Spiel das bessere Vehikel als eine tiefe Sim. Wenn
+§7c) ist ein schlankes, verbreitbares Spiel das bessere Vehikel als eine tiefe Sim. Wenn
 etwas gesagt werden soll, braucht es Reichweite, nicht Tiefe. Die teilbare Aussage gehört
 deshalb näher an den Anfang als in eine späte Ausbaustufe.
 
@@ -235,7 +235,39 @@ Stattdessen:
 
 ---
 
-## 7b. Spätere Achse: Kooperation (geparkt — NICHT im ersten Aufbau)
+## 7b. Story & Erzählung — emergent, nicht aufgesetzt
+
+Vergleichspunkt: Reine Fabriksimulatoren (z. B. Beer Factory, 41% positiv) haben oft *keine*
+Story — ein Mechanik-Sandkasten ohne Grund, sich zu kümmern. Das ist eine Schwäche, die wir
+vermeiden, ohne in die andere Falle (aufgesetzte Kampagne) zu laufen.
+
+**Die Story ist die Monopol-vs-Kooperation-Spannung selbst.** Nicht „Mann gründet Brauerei",
+sondern: Du startest klein, der Markt zwingt zur Verdrängung, und irgendwann stehst du vor
+der Wahl — den Nachbarn schlucken oder mit ihm teilen. Das ist ein dramatischer Bogen, der
+schon im Kern steckt (§7c). Keine separate Handlung nötig.
+
+**Vorrang für emergente Story.** Die stärkste Geschichte in einem Wirtschaftsspiel entsteht
+aus den Entscheidungen des Spielers: „Ich ließ den Nachbarn im dritten Jahr pleitegehen, um
+billig seine Tanks zu kriegen — und stand dann allein auf brüchigem Grund." Stärker als jede
+vorgesetzte Handlung, weil der Spieler sie selbst geschrieben hat. Deckt sich mit dem
+Designgesetz (§7c): erfahren lassen, nicht predigen.
+
+**Drei leichte Rahmungs-Momente — die richtige Dosis (auch mobil):**
+1. **Anfang:** ein, zwei Sätze, die die Welt setzen — kleine Brauerei, Dorf, Druck von außen.
+2. **Wendepunkte:** der schwächelnde Nachbar als *benannte* Figur, nicht als anonymes Event.
+   Gibt der Kooperations-/Verdrängungs-Entscheidung ein Gesicht.
+3. **Schluss:** spiegelt die Entscheidungen statt nur Zahlen zu zeigen — „Du herrschst über
+   einen Markt, der unter dir schrumpft" vs. „Dein Netzwerk trägt mehr, als du allein je
+   könntest."
+
+**Was NICHT kommt:** lineare Kampagne, Charakter-Hintergrundgeschichten, geschriebene Akte,
+Cutscenes. Das wäre dasselbe Muster wie bei Mechaniken — Tiefe hinzufügen, bevor der Kern
+trägt, nur erzählerisch. Zuerst der Kern (der die emergente Story ermöglicht), dann die drei
+Rahmungs-Momente, erst viel später — wenn überhaupt — mehr.
+
+---
+
+## 7c. Spätere Achse: Kooperation (geparkt — NICHT im ersten Aufbau)
 
 > Status: **Idee, bewusst zurückgestellt.** Kommt frühestens, wenn der Game-A-Kern
 > (Knappheit, Fixkosten, Investition) wirklich trägt und durchgespielt ist. Hier nur
