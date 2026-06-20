@@ -250,6 +250,9 @@
             <span>Kapazität <b id="pfCap">0</b> · Geplant <b id="pfPlan">0</b> hl</span>
             <span>Braukosten <b id="pfCost">CHF 0</b></span>
           </div>
+          <div class="prod-foot" style="border-top:none;padding-top:0;margin-top:2px">
+            <span id="pfSat">&nbsp;</span>
+          </div>
         </div>
       </div>
 
@@ -320,7 +323,7 @@
    ────────────────────────────────────────────── */
 const B = {
   start: { cash: 25000, capacity: 60, rep: 48, marketSize: 80, debt: 0, goalYears: 7, loseThreshold: -6000 },
-  fixedCosts: { baseOverhead: 1200, perCapacityHl: 15 },
+  fixedCosts: { baseOverhead: 1200, perCapacityHl: 22 },
   buildings: [
     { id:"gaertank",  name:"Gärtank-Erweiterung", cost:14000, capAdd:40, fixPerQ:1500, desc:"+ 40 hl · CHF 1'500/Q Fixkosten" },
     { id:"abfuell",   name:"Abfüllstraße",         cost:22000, capAdd:60, fixPerQ:2200, desc:"+ 60 hl · CHF 2'200/Q · braucht Gärtank", requires:"gaertank" },
@@ -344,6 +347,9 @@ const B = {
   ],
   market: { baseGrowthPerQ:0.022, repGrowthFactor:0.0007, max:1000 },
   demand: { repBase:0.5, repPerPoint:0.005, priceElasticity:1.4, spread:[0.82,1.18] },
+  // Markt-Sättigung (#1/#2): Verkauf über sweet×Markt drückt den Durchschnittspreis.
+  // ratio = verkauft / Markt ; satMult = ratio<=sweet ? 1 : max(floor, 1-(ratio-sweet)*steep)
+  saturation: { sweet:0.82, steep:2.2, floor:0.5 },
   rnd: { costPerQ:2500, durationQ:3, qualitySpread:[0.88,1.12] },
   seasons: { Frühling:1.05, Sommer:1.25, Herbst:1.0, Winter:0.85 },
 };
@@ -789,6 +795,16 @@ function resolveQuarter(eventRes) {
     perBrew.push({ name:b.name, sold, avail });
   }
 
+  // Markt-Sättigung: zu viel Volumen relativ zum Markt drückt den Durchschnittspreis.
+  const satRatio = soldTotal / Math.max(1, S.marketSize);
+  const sat = B.saturation;
+  const satMult = satRatio <= sat.sweet ? 1 : Math.max(sat.floor, 1 - (satRatio - sat.sweet) * sat.steep);
+  if (satMult < 0.995) {
+    const lost = Math.round(revenue * (1 - satMult));
+    notes.push(`Markt gesättigt — Preis gedrückt (−${fmt(lost)}).`);
+    revenue *= satMult;
+  }
+
   const leftover = Math.max(0, prodTotal - soldTotal);
   const oldSold = Math.min(S.stock, Math.round(rnd(0.2,0.45)*S.stock));
   revenue += oldSold * 300;
@@ -1110,6 +1126,21 @@ function updateProdFoot() {
   const pe = document.getElementById("pfPlan"); pe.textContent = p;
   pe.className = p > S.capacity ? "over" : "";
   document.getElementById("pfCost").textContent = fmt(brewCostTotal());
+
+  // Markt-Auslastung (Sättigungs-Vorschau): geplanter Absatz / Markt
+  const projSold = S.brews.reduce((s,b)=>s + Math.min(b.plan, estimateDemand(b)), 0);
+  const ratio = projSold / Math.max(1, S.marketSize);
+  const pct = Math.round(ratio*100);
+  const sweet = B.saturation.sweet;
+  const el = document.getElementById("pfSat");
+  if (el) {
+    if (ratio <= sweet) {
+      el.innerHTML = `Marktauslastung <b style="color:var(--green-t)">${pct}%</b> · gesunder Absatz (ab ${Math.round(sweet*100)}% sinkt der Preis)`;
+    } else {
+      const satMult = Math.max(B.saturation.floor, 1-(ratio-sweet)*B.saturation.steep);
+      el.innerHTML = `Marktauslastung <b style="color:var(--red)">${pct}%</b> · Markt gesättigt — Preis nur noch ~${Math.round(satMult*100)}%`;
+    }
+  }
 }
 
 function updateStartBtn() {

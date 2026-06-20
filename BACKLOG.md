@@ -11,9 +11,11 @@
 **Status (2026-06-20):** Bug behoben + Hebel 1 angewandt. `fixedCost()` summiert jetzt die
 `fixPerQ` aller gebauten Gebäude (war read-but-never-charged). Werte: Gärtank 1500, Abfüll 2200,
 Halle2 3500. Verifiziert: leerer Tank blutet −2'100/Q, voll ausgelastet Amortisation ~3,5 Q.
-**Hebel 2 (`perCapacityHl` 15→28) bewusst zurückgestellt** — er verschärft das ganze Frühspiel,
-nicht nur den Tank-No-Brainer; greift erst, falls #2 (Markt als Bremse) nicht reicht. Noch durch
-mehrere Durchläufe zu bestätigen.
+**Update (2. Runde):** Sim (`tools/sim.mjs`, Naiv- vs. Skill-Bot) zeigte: „alles ausbauen"
+blieb sicherer Sieg (0% Pleiten/Hart) — Ursache fette Margen + frei wachsender Markt. **Hebel 2
+jetzt angewandt: `perCapacityHl` 15→22** (moderat; Start-Fix 2'100→2'520, lebensfähig) → leere
+Kapazität blutet. **Offen: menschliches Playtest** — das genaue „naiv riskant / Skill gewinnt"-Band
+ist per Bot nicht fixierbar (Bots binär 0%/100%), nur per Spielgefühl. Werte nachjustieren.
 
 **Problem (durch Spielen entdeckt, mit Zahlen bestätigt):**
 Der erste Ausbau wird immer sofort gebaut, sobald Geld da ist — also ist es keine
@@ -61,10 +63,12 @@ und „Hart" spielen. Nicht überdrehen — Ausbau muss attraktiv BLEIBEN, nur n
   Gärtank" (+40 hl), jeder teurer (×1.4) und mit höheren Fixkosten (×1.4) als der vorige.
   `B.expansion` + `buyExtraTank()` + `extraTankFixTotal()`. Es gibt jetzt IMMER eine nächste,
   zunehmend riskantere Ausbau-Entscheidung. Verifiziert: Kosten 16k/22.4k/31.4k, Fix 1500/2100/2940.
-- *Teil B — Markt als Bremse:* `B.market.max` 600→1000. Nachfrage skaliert mit `marketSize`
-  (bereits im Modell). Verifiziert: ohne Verkäufer/mittlerer Ruf wächst der Markt nur auf ~378 hl
-  (Überbau blutet), mit Verkäufer+gutem Ruf bis 1000 (Expansion lohnt sich) → die Grenze ist die
-  genährte Nachfrage, keine harte hl-Wand.
+- *Teil B — Markt als Bremse:* `B.market.max` 600→1000. Nachfrage skaliert mit `marketSize`.
+- *Teil B+ — Markt-Sättigung (2. Runde):* `B.saturation` {sweet:0.82, steep:2.2, floor:0.5}.
+  Verkauf über 82% des Marktes drückt den Durchschnittspreis (bis Boden 50%). Im UI sichtbar
+  (Produktionsplan: „Marktauslastung X%") und im Log nach der Abrechnung. So bestraft Fluten
+  (mehr produzieren als der genährte Markt will) sich selbst — sinkende Grenzerträge statt
+  hl-Wand. Verifiziert: bei 163% Auslastung Preis → 50%, Quartal kippt ins Minus.
 - *Teil C:* erfüllt durch #1 (Fixkosten scharf).
 - **Offen:** 2–3 Durchläufe auf Standard/Hart spielen. Prüfen, ob der Markt mit Verkäufer zu
   leicht ans Maximum kommt (ggf. `repGrowthFactor` oder `max` senken) und ob „nicht weiter
