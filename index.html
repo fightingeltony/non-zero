@@ -174,6 +174,9 @@
   .rnd-result .rr-traits{font-size:11px;color:var(--paper-dim)}
 
   .hidden{display:none}
+  .menu-btn{background:transparent;border:1px solid var(--line);color:var(--paper-faint);font-family:'Courier New',monospace;font-size:12px;padding:5px 10px;cursor:pointer;border-radius:2px;letter-spacing:1px;transition:.12s}
+  .menu-btn:hover{border-color:var(--copper);color:var(--copper-bright)}
+  .save-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--hop);margin-right:5px;vertical-align:middle}
   @media(max-width:520px){
     .ledger{grid-template-columns:repeat(2,1fr)}
     .brand{font-size:22px}body{padding:10px}.panel{padding:12px}
@@ -186,6 +189,7 @@
 
   <header>
     <div><div class="brand">non-zero<small>Mikrobrauerei · Uster</small></div></div>
+    <button class="menu-btn hidden" id="menuBtn" onclick="showMenu()">≡ Menü</button>
     <div class="period">
       <div class="diff-badge" id="diffLabel">Standard</div>
       <div>Jahr <span id="yearEl">1</span> · <b id="seasonEl">Frühling</b></div>
@@ -475,6 +479,7 @@ function newGame(diffKey) {
     lastEvent: null, lastQuarterResult: null, currentEvent: null,
   };
   pushLog("·","Gründung",`Stufe „${d.label}" · Startkapital ${fmt(cash)}.`,"");
+  document.getElementById("menuBtn").classList.remove("hidden");
   render();
 }
 
@@ -660,10 +665,11 @@ function chooseEvent(i) {
   S.lastQuarterResult = q;
   advanceTime();
 
-  if (S.cash < B.start.loseThreshold) { render(); setTimeout(()=>gameOver(false),100); return; }
-  if (S.year > B.start.goalYears)      { render(); setTimeout(()=>gameOver(true),100);  return; }
+  if (S.cash < B.start.loseThreshold) { clearSave(); render(); setTimeout(()=>gameOver(false),100); return; }
+  if (S.year > B.start.goalYears)      { clearSave(); render(); setTimeout(()=>gameOver(true),100);  return; }
 
   S.phase = "plan";
+  saveGame();
   render();
 }
 
@@ -1142,27 +1148,89 @@ function renderLog() {
 }
 
 /* ──────────────────────────────────────────────
+   SAVE / LOAD
+   ────────────────────────────────────────────── */
+const SAVE_KEY = "non-zero-v1";
+
+function saveGame() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e) {}
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function clearSave() {
+  localStorage.removeItem(SAVE_KEY);
+}
+
+function hasSave() {
+  return !!localStorage.getItem(SAVE_KEY);
+}
+
+function saveInfo() {
+  const sv = loadGame();
+  if (!sv) return null;
+  const d = DIFF[sv.diffKey];
+  return `Jahr ${sv.year} · ${SEASONS[sv.seasonIdx]} · ${d?.label||""} · ${fmt(sv.cash)}`;
+}
+
+/* ──────────────────────────────────────────────
    START / END
    ────────────────────────────────────────────── */
 const overlay = document.getElementById("overlay");
 const modal   = document.getElementById("modal");
 
 function showStart() {
+  const sv = hasSave();
+  const info = sv ? saveInfo() : null;
   modal.innerHTML = `<h1>non-zero</h1>
     <div class="tagline">Mikrobrauerei · Uster</div>
+    ${sv ? `<button class="btn-primary" id="continueBtn" style="margin-bottom:12px">
+      <span class="save-dot"></span>Weiterspielen — ${info}
+    </button>` : ""}
     <p>Führe eine kleine Brauerei durch <b>${B.start.goalYears} Jahre</b>. Jedes Quartal: investiere in Kapazität, Personal und Upgrades — dann produziere, vermarkte und triff eine Ereignis-Entscheidung. <b>Fixkosten laufen immer mit</b> — wer zu schnell wächst, blutet.</p>
     <p><b>Sieg:</b> ${B.start.goalYears} Jahre profitabel überstehen. <b>Pleite</b> bei Bargeld unter ${fmt(B.start.loseThreshold)}.</p>
-    <p style="text-align:center;color:var(--copper-bright);font-family:'Courier New',monospace;font-size:11px;letter-spacing:1.5px;margin-top:4px">SCHWIERIGKEIT WÄHLEN</p>
+    <p style="text-align:center;color:var(--copper-bright);font-family:'Courier New',monospace;font-size:11px;letter-spacing:1.5px;margin-top:4px">NEUES SPIEL</p>
     <div class="diff-btns">
       <button class="btn-ghost" data-d="easy">Sanft</button>
       <button class="btn-ghost" data-d="std">Standard</button>
       <button class="btn-ghost" data-d="hard">Hart</button>
     </div>`;
   overlay.classList.remove("hidden");
+  document.getElementById("continueBtn")?.addEventListener("click", () => {
+    const saved = loadGame();
+    if (!saved) return;
+    S = saved;
+    overlay.classList.add("hidden");
+    document.getElementById("menuBtn").classList.remove("hidden");
+    render();
+  });
   modal.querySelectorAll("button[data-d]").forEach(b => b.onclick = () => {
+    clearSave();
     overlay.classList.add("hidden");
     newGame(b.dataset.d);
   });
+}
+
+function showMenu() {
+  modal.innerHTML = `<h1 style="font-size:20px">Menü</h1>
+    <div class="tagline">non-zero · ${S ? `Jahr ${S.year} · ${season()}` : ""}</div>
+    <button class="btn-primary" id="resumeBtn" style="margin-bottom:10px">Weiterspielen</button>
+    <button class="btn-ghost" id="newGameBtn">Neues Spiel starten</button>`;
+  overlay.classList.remove("hidden");
+  document.getElementById("resumeBtn").onclick = () => overlay.classList.add("hidden");
+  document.getElementById("newGameBtn").onclick = () => {
+    if (confirm("Aktuellen Spielstand verwerfen und neu starten?")) {
+      clearSave();
+      overlay.classList.add("hidden");
+      document.getElementById("menuBtn").classList.add("hidden");
+      showStart();
+    }
+  };
 }
 
 function gameOver(won) {
