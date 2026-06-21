@@ -6,16 +6,152 @@
 
 ---
 
-## #1 — Gärtank ist ein No-Brainer (Fixkostenfalle deaktiviert) · ✅ HEBEL 1 UMGESETZT
+## STATUS (Stand letzte Session)
 
-**Status (2026-06-20):** Bug behoben + Hebel 1 angewandt. `fixedCost()` summiert jetzt die
-`fixPerQ` aller gebauten Gebäude (war read-but-never-charged). Werte: Gärtank 1500, Abfüll 2200,
-Halle2 3500. Verifiziert: leerer Tank blutet −2'100/Q, voll ausgelastet Amortisation ~3,5 Q.
-**Update (2. Runde):** Sim (`tools/sim.mjs`, Naiv- vs. Skill-Bot) zeigte: „alles ausbauen"
-blieb sicherer Sieg (0% Pleiten/Hart) — Ursache fette Margen + frei wachsender Markt. **Hebel 2
-jetzt angewandt: `perCapacityHl` 15→22** (moderat; Start-Fix 2'100→2'520, lebensfähig) → leere
-Kapazität blutet. **Offen: menschliches Playtest** — das genaue „naiv riskant / Skill gewinnt"-Band
-ist per Bot nicht fixierbar (Bots binär 0%/100%), nur per Spielgefühl. Werte nachjustieren.
+- **#1 Fixkostenfalle / Hebel 2:** teilweise erledigt — `perCapacityHl` 15→22, Start-Fix
+  angepasst. Eingebaut, aber noch zu mild (siehe #0).
+- **#2 Ausbaupfad / Markt als Bremse:** erledigt — wiederholbarer Tank (×1.4 Kosten & Fix),
+  `market.max` 600→1000, Markt-Sättigung (Haircut ab ~82% Marktauslastung) eingebaut.
+- **Simulator (Diagnose-Werkzeug):** committet. Naiv-Greedy + Skill-Bot + Sättigungs-Harness.
+  Wichtigster Befund: Bots liefern BINÄRE Ergebnisse (0% oder 100% Pleite), kein 20–40%-Band —
+  das Band ist eine Eigenschaft *menschlichen* Spiels und kann nur durch Spielen gesetzt werden.
+  Sättigung allein heilt die Dominanz NICHT (bestraft nur Fluten, nicht Leerbauen).
+- **Trotzdem weiterhin zu leicht** → neuer Hauptbefund #0.
+
+---
+
+## #0 — WURZEL: Preis-Elastizität zu schwach · ✅ UMGESETZT (Sim-belegt) — Hart-Playtest offen
+
+**Status (2026-06-21):** Simuliert (`tools/sim.mjs`: neue Bots `playSkillPriced` + `playBoutique`,
+`priceAnalysis`, Elastizitäts-Sweep), Wurzel gefunden, angewandt, im Spiel verifiziert.
+- **Kern-Befund (korrigiert die Fix-Richtung unten):** Faktor allein anheben REICHT NICHT. Der
+  eigentliche Schuldige ist der **Clamp-Boden** in `clamp(1-(pm-1)*faktor, BODEN, 1.5)`: bei
+  `pm=1.3` trifft der Term ab Faktor ~2 den alten Boden **0.40** und sinkt nicht weiter → man
+  behält IMMER 40% Nachfrage, bei fetter Marge freies Geld. Beleg (Hart, 500 Läufe, medCash):
+  Faktor 1.4/Boden 0.40 → BOUTIQUE **512k** ≫ SKILL 274k · Faktor 3.0/Boden **0.40** (nur Faktor)
+  → BOUTIQUE **431k** (kaum Wirkung) · Faktor 3.0/Boden **0.15** (beides) → BOUTIQUE **170k**
+  (schlechteste Strategie), PRICED 302k, SKILL 274k. Preis-Bot landet bei avgPm **1.07**.
+- **Angewandt (`index.html`):** `priceElasticity 1.4→3.0`, neuer `priceFloor 0.40→0.15`; beide
+  Clamp-Stellen nutzen `B.demand.priceFloor`. Im Spiel: +30% → Nachfrage ~16% (vorher 58%),
+  +10% → ~72% (Premium lohnt noch).
+- **Offen:** Hart-Playtest — ~+10%-Sweet-Spot stimmig? +30% noch als Nischenwahl sinnvoll?
+
+**Befund (durch Spielen + Rechnung bestätigt):**
+Auf „Hart" lässt sich bei **maximalem Preis (+30%) trotzdem alles gut verkaufen**. Das ist
+ein dritter Schleichweg, den Sättigung und Hebel 2 NICHT abdecken — und er erklärt, warum das
+Spiel trotz aller bisherigen Fixes zu leicht bleibt. Der Greedy-Bot der Simulation hat den
+Preis-Slider nie aufgedreht, deshalb tauchte dieser Pfad in der Sim nicht auf.
+
+**Mechanismus (Rechnung):**
+- Elastizität aktuell: `elas = clamp(1 - (priceMod-1)*1.4, 0.40, 1.50)`.
+- Bei +30% Preis fällt die Nachfrage nur auf 58% — der reine Gewinn pro Quartal ist fast
+  identisch zu Normalpreis (≈19'700 vs. 22'000 im Rechenbeispiel).
+- ABER: Hochpreis verkauft 58 statt 100 hl → braucht **weniger Kapazität, weniger Produktion,
+  weniger Braukosten, weniger Kapital** für fast denselben Gewinn.
+- Damit ist „Preis hoch + wenig produzieren" die **kapitaleffizienteste** Strategie und umgeht
+  genau die Kapazitäts-/Fixkosten-Klemme, die wir mit #1/#2 erzwingen wollten.
+
+**Tiefere Wurzel:** Die Marge pro hl ist so fett, dass der Spieler frei wählen kann, ob er über
+*Menge* oder über *Preis* gewinnt — und Preis ist der bequemere Weg. Solange das so ist,
+dominiert Hochpreis alle Mengen-Mechaniken.
+
+**Fix-Richtung — Elastizität deutlich aggressiver:**
+- Faktor `1.4` → eher `2.5–3.0`, sodass Hochpreis spürbar mehr Menge kostet, als er an Marge
+  bringt. Ziel: bei +30% Preis bricht die Nachfrage so stark ein, dass der Gewinn klar UNTER
+  Normalpreis liegt — Hochpreis wird zur Nischenwahl (knappe Kapazität), nicht zur Dauerlösung.
+
+**WICHTIG — nicht raten, simulieren (Lehre aus der Messerschneide):**
+- Preis-/Margen-Zahlen sind Messerschneiden (Sim hat gezeigt: 50%→40% Marge = 0%→100% Pleite).
+- Daher: **Skill-Bot erweitern, sodass er den Preis-Hebel nutzt** (Preis aufdrehen, bis Grenz-
+  gewinn kippt). Dann aggressive Elastizität gegen diesen preisbewussten Bot testen.
+- Zielzustand: Hochpreis-Wenigproduzieren ist KEINE freie Gewinnstrategie mehr; der Bot muss
+  echte Trade-offs zwischen Preis und Menge eingehen. Start muss lebensfähig bleiben.
+- Erst danach Werte ins echte Spiel, dann von Hand auf „Hart" nachschärfen.
+
+---
+
+## #0b — Lagerbestand anzeigen (Information) · ✅ UMGESETZT (2026-06-21)
+
+**Status:** Erledigt. Produktionsplan-Footer zeigt „Lager **X** hl" (neben Kapazität/Geplant),
+aus `S.stock`; >0 → gold (gebundenes Kapital sichtbar). Reine Anzeige, im Spiel verifiziert.
+
+**Problem:** Bei Überproduktion sieht der Spieler den entstehenden Lagerbestand aktuell NICHT
+(die hl-Kennzahl fehlt im Plan). Damit kann man nicht lernen, klüger zu planen — und die
+Überproduktions-Kosten bleiben unsichtbar.
+
+**Task:** Aktuellen Lagerbestand (unverkaufte hl) sichtbar machen — im Produktionsplan und/oder
+in der Ledger-Leiste. Reine Anzeige, keine neue Mechanik. Niedriger Aufwand, hoher
+Diagnose-Nutzen (auch für die Elastizitäts-Arbeit in #0: man sieht, was liegenbleibt).
+
+**Bewusst NUR Anzeige.** Lagerverwaltung/Rampenverkäufe als *Mechanik* → geparkt (siehe unten),
+NICHT jetzt: Eine neue Optimierungsmechanik auf einen noch dominierten Kern zu setzen wäre
+„Inhalt vor Fundament". Lagerverwaltung wird erst interessant, wenn Überproduktion (via #0/#1)
+echte Kosten hat.
+
+---
+
+## #0c — Forecast entschärfen + Lager mit Konsequenz · ✅ UMGESETZT (2026-06-21) — Hart-Playtest offen
+
+**Status:** Beide Teile umgesetzt + im Spiel verifiziert.
+- **Teil 1 (Forecast entschärft):** Per-Sorte-Zeile zeigt nur noch Rohdaten zum Schätzen —
+  Preis + Saison + Tendenz (z. B. „CHF 295/hl · Frühling · gefragt"). Die vorgekaute Antwort
+  („~X hl", „passend/Plan über Bedarf/Bedarf nicht gedeckt") ist RAUS. Letzte-Saison-Zeile und
+  Lager-Anzeige (#0b) liefern den Rest. (`renderBrews` + Slider-Handler.)
+- **Teil 2 (Lager mit Konsequenz):** Werte aus dem Code in `B.stock` gezogen
+  (`spoilRate 0.20, fireSalePrice 300, fireSaleFrac [0.2,0.45]`) und jede Folge ins Log gebracht:
+  „Notverkauf N hl Altlager zu CHF 300/hl · N hl unverkauft → Lager · N hl verdorben". Sim
+  (`tools/sim.mjs`) auf Parität gezogen. Werte = bisheriges Verhalten (kein stiller Balance-Shift),
+  nur sichtbar + justierbar.
+- **Offen:** Hart-Playtest — ist die Lager-Strafe scharf genug, dass „zu viel produziert" wehtut,
+  ohne den Start zu erdrücken? Ggf. `spoilRate`/`fireSalePrice` in `B.stock` nachschärfen. Und:
+  fühlt sich die Mengenwahl ohne vorgekaute Antwort jetzt wie eine echte Entscheidung an?
+- **Bewusst gelassen:** Die „Marktauslastung X%"-Zeile (Sättigungs-Vorschau aus #2) bleibt — sie
+  betrifft die Preis-Haircut-Mechanik, nicht die „wie viel brauen = passend"-Antwort. Falls sie
+  sich im Playtest auch zu vorgekaut anfühlt, separat entschärfen.
+
+> Hinweis: #0/#0b sind bereits in Arbeit. Das hier ist eine ERGÄNZUNG, kein Umsturz —
+> dieselbe Baustelle, eine Ebene tiefer gedacht. Verschiebt die Lagermechanik bewusst aus
+> „geparkt" in den Kern (siehe Begründung).
+
+**Designeinsicht (durch Spielen entdeckt):** Perfekte Information tötet die Entscheidung.
+Der aktuelle Hinweis „erwartet ~X hl · passend/Überproduktion" rechnet dem Spieler die Antwort
+VOR — man zieht einfach auf „passend" hoch und denkt nicht nach. Das ist dieselbe Krankheit wie
+der dominante Ausbau, nur auf der Informationsebene: eine Entscheidung mit verratener Lösung ist
+keine Entscheidung. (Symmetrisch zum früheren „zu berechenbar"-Problem mit dem Forecast — jetzt
+von der anderen Seite gesehen.)
+
+**Warum das Kern ist, nicht Erweiterung:** Es geht NICHT darum, eine Optimierungsmechanik
+draufzusetzen. Es geht darum, dem Spieler die vorgekaute Antwort WEGZUNEHMEN. Lager +
+unvollständige Information machen die Mengenentscheidung überhaupt erst zu einer Entscheidung
+(abwägen statt ablesen). Das ist der eigentliche Grund, warum „Lagerverwaltung" sich richtig
+anfühlt — nicht „mehr Mechanik ist cool", sondern: sie stellt die fehlende Spannung her.
+
+**Zwei Teile:**
+
+1. **Forecast entschärfen (Reduktion, kein neues System).** Statt der fertigen Antwort nur die
+   *Rohdaten zum Schätzen* zeigen: letzte Saison verkauft, aktueller Lagerbestand, grobe Tendenz
+   (z. B. „Sommer · Lager gefragt"). Die Synthese — wie viel produziere ich jetzt — bleibt beim
+   Spieler. NICHT mehr „~80 hl, passend" ausgeben. Das ist fast der ganze Effekt und ist eine
+   Vereinfachung, kein Mehraufwand.
+
+2. **Lager muss Konsequenz haben.** Sonst ist Überproduktion folgenlos und die Abwägung wieder
+   leer. Unverkauftes Bier altert/verfällt, bindet Kapital, muss ggf. unter Wert raus. Erst dann
+   hat „zu viel produziert" Kosten, gegen die man plant. (Wert/Verfallsrate in `B`, durch
+   Spielen justieren.)
+
+**Verzahnung mit #0 (Elastizität):** Wenn Überproduktion wehtut UND Hochpreis weniger verkauft,
+wird die Mengen-Preis-Entscheidung zu einer echten GEMEINSAMEN Abwägung — statt zweier Slider,
+die man unabhängig hochzieht. Die zwei Wurzeln (Elastizität, perfekte Information) verstärken
+sich gegenseitig in die richtige Richtung.
+
+**Reihenfolge:** Teil 1 (Forecast entschärfen) kann sofort mit der laufenden #0b-Arbeit
+mitgehen — es ist dieselbe UI-Stelle. Teil 2 (Lager mit Konsequenz) zusammen mit #0
+(Elastizität), weil beide „Überproduktion soll wehtun" bedienen. Danach von Hand auf „Hart"
+prüfen: Muss ich jetzt wirklich überlegen, wie viel ich produziere?
+
+---
+
+## #1 — Gärtank ist ein No-Brainer (Fixkostenfalle deaktiviert) · PRIORITÄT HOCH
 
 **Problem (durch Spielen entdeckt, mit Zahlen bestätigt):**
 Der erste Ausbau wird immer sofort gebaut, sobald Geld da ist — also ist es keine
@@ -56,23 +192,7 @@ und „Hart" spielen. Nicht überdrehen — Ausbau muss attraktiv BLEIBEN, nur n
 
 ---
 
-## #2 — Ausbaupfad zu kurz, Kapazität als Sackgasse · ✅ TEIL A + B UMGESETZT
-
-**Status (2026-06-20):**
-- *Teil A — wiederholbarer Ausbau:* Nach „Zweite Halle" gibt es einen kaufbaren „Weiterer
-  Gärtank" (+40 hl), jeder teurer (×1.4) und mit höheren Fixkosten (×1.4) als der vorige.
-  `B.expansion` + `buyExtraTank()` + `extraTankFixTotal()`. Es gibt jetzt IMMER eine nächste,
-  zunehmend riskantere Ausbau-Entscheidung. Verifiziert: Kosten 16k/22.4k/31.4k, Fix 1500/2100/2940.
-- *Teil B — Markt als Bremse:* `B.market.max` 600→1000. Nachfrage skaliert mit `marketSize`.
-- *Teil B+ — Markt-Sättigung (2. Runde):* `B.saturation` {sweet:0.82, steep:2.2, floor:0.5}.
-  Verkauf über 82% des Marktes drückt den Durchschnittspreis (bis Boden 50%). Im UI sichtbar
-  (Produktionsplan: „Marktauslastung X%") und im Log nach der Abrechnung. So bestraft Fluten
-  (mehr produzieren als der genährte Markt will) sich selbst — sinkende Grenzerträge statt
-  hl-Wand. Verifiziert: bei 163% Auslastung Preis → 50%, Quartal kippt ins Minus.
-- *Teil C:* erfüllt durch #1 (Fixkosten scharf).
-- **Offen:** 2–3 Durchläufe auf Standard/Hart spielen. Prüfen, ob der Markt mit Verkäufer zu
-  leicht ans Maximum kommt (ggf. `repGrowthFactor` oder `max` senken) und ob „nicht weiter
-  ausbauen" sich je richtig anfühlt.
+## #2 — Ausbaupfad zu kurz, Kapazität als Sackgasse · PRIORITÄT HOCH (mit #1 zusammen)
 
 **Problem (durch Spielen entdeckt, mit Zahlen bestätigt):**
 Man kommt schnell an die Maximalkapazität und lässt dann nur noch durchlaufen — die zweite
@@ -201,6 +321,12 @@ Fabriksimulator nicht hat — das ist das Differenzierungsmerkmal, nicht der Rea
 ---
 
 ## Geparkt (nicht im aktuellen Aufbau — siehe GAME_DESIGN §7b/§8)
+
+- **Erweiterte Lagermechanik / Rampenverkäufe** (über #0c hinaus). Der Kern-Teil — Lager mit
+  Konsequenz + entschärfter Forecast — ist nach #0c in den Kern gewandert (perfekte Information
+  tötet die Entscheidung). Hier bleibt nur das WEITERGEHENDE geparkt: gezielte Lagerhaltung für
+  antizipierte Nachfragespitzen, Notverkaufs-Kanäle, Mehrlager-Logik. Erst wenn #0c steht und
+  trägt.
 
 - Kooperations-Achse / Shared Infrastructure (kommt erst, wenn der Game-A-Kern trägt).
 - Andere Brauereien als Entscheidungspartner (an die Kooperations-Achse gekoppelt).

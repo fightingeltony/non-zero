@@ -247,7 +247,7 @@
           <h2>Produktionsplan <span class="hint">in Hektoliter</span></h2>
           <div id="brewList"></div>
           <div class="prod-foot">
-            <span>Kapazität <b id="pfCap">0</b> · Geplant <b id="pfPlan">0</b> hl</span>
+            <span>Kapazität <b id="pfCap">0</b> · Geplant <b id="pfPlan">0</b> · Lager <b id="pfStock">0</b> hl</span>
             <span>Braukosten <b id="pfCost">CHF 0</b></span>
           </div>
           <div class="prod-foot" style="border-top:none;padding-top:0;margin-top:2px">
@@ -346,10 +346,17 @@ const B = {
     { amount:30000, interestAnnual:0.11 },
   ],
   market: { baseGrowthPerQ:0.022, repGrowthFactor:0.0007, max:1000 },
-  demand: { repBase:0.5, repPerPoint:0.005, priceElasticity:1.4, spread:[0.82,1.18] },
+  // priceElasticity & priceFloor (#0): bei +Preis bricht die Nachfrage. Faktor 3.0 + Boden 0.15
+  // (statt 1.4 + 0.40) — ein moderates Premium (~+10%) lohnt noch, aber „+30% & wenig brauen"
+  // bricht den Absatz auf ~15% und ist kein freier Schleichweg mehr (per Sim belegt, tools/sim.mjs).
+  demand: { repBase:0.5, repPerPoint:0.005, priceElasticity:3.0, priceFloor:0.15, spread:[0.82,1.18] },
   // Markt-Sättigung (#1/#2): Verkauf über sweet×Markt drückt den Durchschnittspreis.
   // ratio = verkauft / Markt ; satMult = ratio<=sweet ? 1 : max(floor, 1-(ratio-sweet)*steep)
   saturation: { sweet:0.82, steep:2.2, floor:0.5 },
+  // Lager (#0c Teil 2): Altbestand wird teils unter Wert notverkauft (fireSalePrice je hl,
+  // Anteil fireSaleFrac), der Rest verdirbt je Quartal (spoilRate). Macht Überproduktion teuer
+  // und sichtbar (Log). Werte hier justierbar — durch Spielen auf „Hart" nachschärfen.
+  stock: { spoilRate:0.20, fireSalePrice:300, fireSaleFrac:[0.2,0.45] },
   rnd: { costPerQ:2500, durationQ:3, qualitySpread:[0.88,1.12] },
   seasons: { Frühling:1.05, Sommer:1.25, Herbst:1.0, Winter:0.85 },
 };
@@ -561,7 +568,7 @@ function estimateDemand(b) {
   const qualMult = S.staff.braumeister ? B.staff.find(r=>r.id==="braumeister").qualityMult : 1;
   const cultMult = b.cultDemand ? 1.30 : 1;
   const pm = b.priceMod || 1;
-  const elas = clamp(1 - (pm-1) * B.demand.priceElasticity, 0.40, 1.50);
+  const elas = clamp(1 - (pm-1) * B.demand.priceElasticity, B.demand.priceFloor, 1.50);
   const mktBoost = S.marketing / 15000;
   const mktScale = S.marketSize / B.start.marketSize;
   return Math.round(b.baseDemand * mktScale * (b.pull[sea]||1) * repFactor * qualMult * cultMult * elas * S.diff.demandMult * (1 + mktBoost));
@@ -782,7 +789,7 @@ function resolveQuarter(eventRes) {
     if (avail === 0 && b.plan === 0) continue;
     const cultMult = b.cultDemand ? 1.30 : 1;
     const pm = b.priceMod || 1;
-    const elas = clamp(1-(pm-1)*B.demand.priceElasticity, 0.40, 1.50);
+    const elas = clamp(1-(pm-1)*B.demand.priceElasticity, B.demand.priceFloor, 1.50);
     const rawDemand = b.baseDemand * mktScl * (b.pull[sea]||1) * repFactor * qualMult * cultMult * elas
       * S.diff.demandMult * slumpMult * qualStandDemMult * (1 + mktBoost + demBoost);
     const demand = Math.round(rawDemand * rnd(...B.demand.spread));
@@ -805,10 +812,16 @@ function resolveQuarter(eventRes) {
     revenue *= satMult;
   }
 
+  // Lager (#0c Teil 2): Überproduktion soll wehtun UND sichtbar sein. Altbestand teils unter
+  // Wert notverkaufen, Rest verdirbt anteilig — jede Folge landet im Log, damit man daraus lernt.
   const leftover = Math.max(0, prodTotal - soldTotal);
-  const oldSold = Math.min(S.stock, Math.round(rnd(0.2,0.45)*S.stock));
-  revenue += oldSold * 300;
-  S.stock = Math.round(((S.stock - oldSold) + leftover) * 0.80);
+  const oldSold = Math.min(S.stock, Math.round(rnd(...B.stock.fireSaleFrac) * S.stock));
+  if (oldSold > 0) { revenue += oldSold * B.stock.fireSalePrice; notes.push(`Notverkauf ${oldSold} hl Altlager zu ${fmt(B.stock.fireSalePrice)}/hl.`); }
+  const carried = (S.stock - oldSold) + leftover;
+  S.stock = Math.round(carried * (1 - B.stock.spoilRate));
+  const spoiled = carried - S.stock;
+  if (leftover > 0) notes.push(`${leftover} hl unverkauft → Lager.`);
+  if (spoiled > 0) notes.push(`${spoiled} hl Lager verdorben.`);
   S.cash += revenue;
 
   if (S.debt > 0) {
@@ -1042,7 +1055,6 @@ function renderBrews() {
   const list = document.getElementById("brewList");
   list.innerHTML = "";
   for (const b of S.brews) {
-    const est = estimateDemand(b);
     const pull = b.pull[season()]||1;
     const pullTxt = pull>=1.3?"★ Hochsaison":pull>=1.05?"gefragt":pull>=0.95?"normal":"Nebensaison";
     let salesLine = "";
@@ -1052,11 +1064,6 @@ function renderBrews() {
       const tag = leftover<=0?"ausverkauft":`${leftover} hl übrig`;
       salesLine = `<span style="color:${col}">letzte Saison ${b.lastSold}/${b.lastAvail} · ${tag}</span>`;
     }
-    const planHint = b.plan>est+5
-      ? `<span style="color:var(--red)">Plan über Bedarf</span>`
-      : b.plan>0&&b.plan<est-5
-      ? `<span style="color:var(--green-t)">Bedarf nicht gedeckt</span>`
-      : "passend";
     let badges = "";
     if (b.rarity==="legend") badges += `<span class="badge legend">Kult</span>`;
     else if (b.rarity==="rare") badges += `<span class="badge rare">Eigenkreation</span>`;
@@ -1072,7 +1079,7 @@ function renderBrews() {
       <div class="brew-swatch" style="background:${b.color}"></div>
       <div class="brew-info">
         <div class="brew-name">${b.name} ${badges}</div>
-        <div class="brew-meta est">${fmt(effPrice)}/hl · <span style="color:var(--green-t)">${pullTxt}</span> · ~${est} hl · ${planHint}</div>
+        <div class="brew-meta est">${fmt(effPrice)}/hl · ${season()} · <span style="color:var(--green-t)">${pullTxt}</span></div>
         ${salesLine ? `<div class="brew-meta">${salesLine}</div>` : ""}
       </div>
       <div class="brew-qty">
@@ -1113,7 +1120,7 @@ function renderBrews() {
       pv.style.color = pmPct>18?"var(--red)":pmPct<0?"var(--gold-d)":"var(--green-t)";
       const pull = b.pull[season()]||1;
       const pullTxt = pull>=1.3?"★ Hochsaison":pull>=1.05?"gefragt":pull>=0.95?"normal":"Nebensaison";
-      row.querySelector(".est").innerHTML = `${fmt(effPrice)}/hl · <span style="color:var(--green-t)">${pullTxt}</span> · ~${estimateDemand(b)} hl`;
+      row.querySelector(".est").innerHTML = `${fmt(effPrice)}/hl · ${season()} · <span style="color:var(--green-t)">${pullTxt}</span>`;
     };
   });
 
@@ -1126,6 +1133,11 @@ function updateProdFoot() {
   const pe = document.getElementById("pfPlan"); pe.textContent = p;
   pe.className = p > S.capacity ? "over" : "";
   document.getElementById("pfCost").textContent = fmt(brewCostTotal());
+
+  // Lagerbestand (unverkaufte hl aus Vorquartalen, nach Schwund). Reine Anzeige (#0b):
+  // gebundenes Kapital sichtbar machen, damit Überproduktion lernbar wird.
+  const st = document.getElementById("pfStock");
+  if (st) { st.textContent = Math.round(S.stock); st.style.color = S.stock > 0 ? "var(--gold-d)" : ""; }
 
   // Markt-Auslastung (Sättigungs-Vorschau): geplanter Absatz / Markt
   const projSold = S.brews.reduce((s,b)=>s + Math.min(b.plan, estimateDemand(b)), 0);
