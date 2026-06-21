@@ -16,25 +16,73 @@
   Wichtigster Befund: Bots liefern BINÄRE Ergebnisse (0% oder 100% Pleite), kein 20–40%-Band —
   das Band ist eine Eigenschaft *menschlichen* Spiels und kann nur durch Spielen gesetzt werden.
   Sättigung allein heilt die Dominanz NICHT (bestraft nur Fluten, nicht Leerbauen).
-- **Trotzdem weiterhin zu leicht** → neuer Hauptbefund #0.
+- **Trotzdem weiterhin zu leicht** → Hauptbefund #0 (Elastizität, inzwischen gefixt: Faktor 3.0
+  + Floor 0.15, Hochpreis-Exploit tot, Skill-Preis-Spiel belohnt).
+- **DIAGNOSE-UMKEHR (wichtig):** Nach #0-Fix immer noch unbefriedigend — aber beim Spielen
+  zeigte sich: das Problem ist NICHT „zu leicht", sondern **GLEICHFÖRMIGKEIT**. Jede Runde
+  verlangt dasselbe. Das erklärt auch „zu leicht" (ein Loop einmal gelöst, dann wiederholt).
+  → Front gewechselt: von *Balance* zu *Varianz/Content*. Siehe neuen Top-Eintrag #K.
 
 ---
 
-## #0 — WURZEL: Preis-Elastizität zu schwach · ✅ UMGESETZT (Sim-belegt) — Hart-Playtest offen
+## #K — KOOPERATIONS-ACHSE aktivieren (Antwort auf Gleichförmigkeit) · 🟡 SCHRITT 1 UMGESETZT — Playtest entscheidet
 
-**Status (2026-06-21):** Simuliert (`tools/sim.mjs`: neue Bots `playSkillPriced` + `playBoutique`,
-`priceAnalysis`, Elastizitäts-Sweep), Wurzel gefunden, angewandt, im Spiel verifiziert.
-- **Kern-Befund (korrigiert die Fix-Richtung unten):** Faktor allein anheben REICHT NICHT. Der
-  eigentliche Schuldige ist der **Clamp-Boden** in `clamp(1-(pm-1)*faktor, BODEN, 1.5)`: bei
-  `pm=1.3` trifft der Term ab Faktor ~2 den alten Boden **0.40** und sinkt nicht weiter → man
-  behält IMMER 40% Nachfrage, bei fetter Marge freies Geld. Beleg (Hart, 500 Läufe, medCash):
-  Faktor 1.4/Boden 0.40 → BOUTIQUE **512k** ≫ SKILL 274k · Faktor 3.0/Boden **0.40** (nur Faktor)
-  → BOUTIQUE **431k** (kaum Wirkung) · Faktor 3.0/Boden **0.15** (beides) → BOUTIQUE **170k**
-  (schlechteste Strategie), PRICED 302k, SKILL 274k. Preis-Bot landet bei avgPm **1.07**.
-- **Angewandt (`index.html`):** `priceElasticity 1.4→3.0`, neuer `priceFloor 0.40→0.15`; beide
-  Clamp-Stellen nutzen `B.demand.priceFloor`. Im Spiel: +30% → Nachfrage ~16% (vorher 58%),
-  +10% → ~72% (Premium lohnt noch).
-- **Offen:** Hart-Playtest — ~+10%-Sweet-Spot stimmig? +30% noch als Nischenwahl sinnvoll?
+**Status (2026-06-21):** Erster Wendepunkt „Der wankende Nachbar" gebaut + im Spiel verifiziert.
+- **Gating:** einmal pro Partie, ab Jahr 4 + Ruf ≥ 45 (Werte in `B.cooperation`). Hat Vorrang vor
+  dem Zufalls-Event-Pool (`pickCoopEvent()` in `pickEvent`) — Saat des #3-Bedingungssystems.
+- **Drei Wege (alle Zahlen in `B.cooperation`, per Spielen justierbar):**
+  - *Aufkaufen (Game A / Defektion):* +40 hl für CHF 9'000 (225/hl, billiger als jeder Gärtank +
+    keine Fixkosten → echte Versuchung). Preis: Markt −15%, Ruf −6. Extraktion frisst die
+    Grundlage, mechanisch (Ledger-Markt sinkt sichtbar).
+  - *Infrastruktur teilen (Game B):* CHF 4'000 + dauerhaft Fixkosten −15% (`fixedCost`-Mult wie
+    Energie), Markt +5%. VERLETZLICH: Folge-Ereignis „Stägehof wankt erneut" (ab Jahr 6) —
+    aushelfen (CHF 5'000, Bindung trägt) oder Partnerschaft platzt (Vorteil weg, Ruf −4).
+  - *Ablehnen:* Nachbar geht unter, Markt −5%. Hält die Wahl ehrlich (man darf ihn fallen lassen).
+- **Designgesetz erfüllt:** möglich/lohnend/verletzlich, kein Gewinnknopf, Defektion verlockt,
+  beide Wege gewinnbar. (Persistenz: `S.neighbor`, `S.shared`; alte Saves bleiben kompatibel.)
+- **Offen — der eigentliche Test (#K Schritt 2):** Zündet DER MOMENT? Fühlt es sich anders an als
+  „Mengen einstellen, Quartal starten"? Per Spielen entscheiden. Zündet er → ausbauen (mehrere
+  Akteure, wiederkehrende Beziehungen, Monopol-vs-Netzwerk-Endzustand §7c). Zündet er nicht →
+  wenig investiert, viel gelernt. Balance der `B.cooperation`-Werte (lohnt Teilen vs. Aufkaufen?)
+  ebenfalls Playtest-Sache.
+- **Hinweis:** Das im Backlog erwähnte `sample-events.js` existierte nicht — Event frisch im
+  `EVENTS`-Umfeld (`makeCoopEvent`/`makeCoopFollowup`) gebaut.
+
+> Richtungsentscheidung dieser Session. Widerspricht bewusst dem früheren „erst Kern, dann
+> Kooperation" — weil sich die Lage geändert hat (Kern trägt jetzt; Problem ist Monotonie,
+> nicht Schwäche). Vollständige Begründung in GAME_DESIGN §7c (Status-Block).
+
+**Befund:** Das Spiel ist gleichförmig — kein Gegenspieler, keine zweite Spielhälfte, man
+optimiert gegen ein totes System. Kein Balance-Fix behebt das; selbst perfekt austariert bliebe
+jede Runde gleich. Die Kooperations-Achse (Monopol vs. Netzwerk) ist nicht nur „Content", sie
+ist das eigentliche Thema UND die fehlende zweite Hälfte, die dem Wachstum etwas entgegensetzt.
+
+**Nebeneffekt auf „zu leicht":** Andere Akteure, die um denselben Markt konkurrieren und
+*reagieren*, erzeugen Schwierigkeit, die kein Zahlendreh herstellt. Wachstum wird vom einsamen
+Optimieren zum Ringen um einen geteilten Pool.
+
+**Vorgehen — klein anfangen, NICHT die volle Game-B-Maschine:**
+1. **EIN Wendepunkt zuerst: „der wankende Nachbar"** (Muster liegt schon in `sample-events.js`).
+   Eine benannte Brauerei gerät in die Fixkostenfalle. Wahl: aufkaufen (Kapazität billig, aber
+   regionaler Markt schrumpft + Ruf leidet) ODER Infrastruktur teilen (beide senken Fixkosten,
+   Markt bleibt lebendig). Irgendwo in der Spielmitte (z. B. Jahr 4+, Ruf-Schwelle).
+2. **Test:** Fühlt sich DER MOMENT anders an als „Mengen einstellen, Quartal starten"? Ist zum
+   ersten Mal jemand da, der reagiert, und eine Entscheidung, die kein Zahlenoptimierungs-Schritt
+   ist? Zündet er → ausbauen (mehrere Akteure, wiederkehrende Beziehungen, Monopol-vs-Netzwerk-
+   Endzustand, §7c). Zündet er nicht → wenig investiert, viel gelernt.
+
+**Eisernes Designgesetz (gilt ab dem ersten Moment, GAME_DESIGN §7c):**
+Kooperation muss möglich, lohnend und VERLETZLICH sein — nie garantiert. Kein Gewinnknopf.
+Defektion (Aufkaufen) muss echt verlocken. Beide Wege gewinnbar, unterschiedlich tragfähig.
+
+**Reihenfolge vs. andere offene Punkte:** #K ist jetzt die Hauptrichtung. #0c (Forecast
+entschärfen + Lager-Anzeige als DARSTELLUNG, nicht im Log — vom Nutzer ausdrücklich gewünscht)
+bleibt parallel sinnvoll, weil es die Mengenentscheidung ebenfalls aus der Trivialität holt.
+Reine Balance-Feinarbeit (#1 Hebel 2 nachschärfen etc.) tritt hinter #K zurück.
+
+---
+
+## #0 — WURZEL: Preis-Elastizität zu schwach · PRIORITÄT HÖCHSTE
 
 **Befund (durch Spielen + Rechnung bestätigt):**
 Auf „Hart" lässt sich bei **maximalem Preis (+30%) trotzdem alles gut verkaufen**. Das ist
@@ -70,18 +118,24 @@ dominiert Hochpreis alle Mengen-Mechaniken.
 
 ---
 
-## #0b — Lagerbestand anzeigen (Information) · ✅ UMGESETZT (2026-06-21)
+## #0b — Lagerbestand anzeigen (Information) · ✅ UMGESETZT inkl. Nutzer-Korrektur (2026-06-21)
 
-**Status:** Erledigt. Produktionsplan-Footer zeigt „Lager **X** hl" (neben Kapazität/Geplant),
-aus `S.stock`; >0 → gold (gebundenes Kapital sichtbar). Reine Anzeige, im Spiel verifiziert.
+**Status:** Lager wird **pro Sorte** im Produktionsplan angezeigt (gold: „Lager X hl" je
+Brew-Zeile, plus Gesamt im Footer). Stock ist jetzt **pro Sorte** modelliert (`b.stock` statt
+globalem `S.stock`). NUTZER-KORREKTUR umgesetzt: keine Log-Meldungen mehr — die Konsequenz ist
+als Darstellung beim Planen präsent und schlägt übers Quartalsergebnis durch. Verifiziert.
 
 **Problem:** Bei Überproduktion sieht der Spieler den entstehenden Lagerbestand aktuell NICHT
 (die hl-Kennzahl fehlt im Plan). Damit kann man nicht lernen, klüger zu planen — und die
 Überproduktions-Kosten bleiben unsichtbar.
 
-**Task:** Aktuellen Lagerbestand (unverkaufte hl) sichtbar machen — im Produktionsplan und/oder
-in der Ledger-Leiste. Reine Anzeige, keine neue Mechanik. Niedriger Aufwand, hoher
-Diagnose-Nutzen (auch für die Elastizitäts-Arbeit in #0: man sieht, was liegenbleibt).
+**Task:** Aktuellen Lagerbestand (unverkaufte hl) sichtbar machen — als **visuelle DARSTELLUNG**
+im Produktionsplan und/oder in der Ledger-Leiste, idealerweise **pro Sorte**. Reine Anzeige,
+keine neue Mechanik. Niedriger Aufwand, hoher Diagnose-Nutzen (man sieht, was liegenbleibt).
+
+> NUTZER-KORREKTUR: NICHT im Geschäftsbuch/Log anzeigen, sondern als eigene Darstellung
+> (Kennzahl/Balken/pro-Sorte-Zeile). Der Lagerbestand soll beim PLANEN präsent sein, nicht
+> nachträglich im Log auftauchen.
 
 **Bewusst NUR Anzeige.** Lagerverwaltung/Rampenverkäufe als *Mechanik* → geparkt (siehe unten),
 NICHT jetzt: Eine neue Optimierungsmechanik auf einen noch dominierten Kern zu setzen wäre
@@ -92,22 +146,11 @@ echte Kosten hat.
 
 ## #0c — Forecast entschärfen + Lager mit Konsequenz · ✅ UMGESETZT (2026-06-21) — Hart-Playtest offen
 
-**Status:** Beide Teile umgesetzt + im Spiel verifiziert.
-- **Teil 1 (Forecast entschärft):** Per-Sorte-Zeile zeigt nur noch Rohdaten zum Schätzen —
-  Preis + Saison + Tendenz (z. B. „CHF 295/hl · Frühling · gefragt"). Die vorgekaute Antwort
-  („~X hl", „passend/Plan über Bedarf/Bedarf nicht gedeckt") ist RAUS. Letzte-Saison-Zeile und
-  Lager-Anzeige (#0b) liefern den Rest. (`renderBrews` + Slider-Handler.)
-- **Teil 2 (Lager mit Konsequenz):** Werte aus dem Code in `B.stock` gezogen
-  (`spoilRate 0.20, fireSalePrice 300, fireSaleFrac [0.2,0.45]`) und jede Folge ins Log gebracht:
-  „Notverkauf N hl Altlager zu CHF 300/hl · N hl unverkauft → Lager · N hl verdorben". Sim
-  (`tools/sim.mjs`) auf Parität gezogen. Werte = bisheriges Verhalten (kein stiller Balance-Shift),
-  nur sichtbar + justierbar.
-- **Offen:** Hart-Playtest — ist die Lager-Strafe scharf genug, dass „zu viel produziert" wehtut,
-  ohne den Start zu erdrücken? Ggf. `spoilRate`/`fireSalePrice` in `B.stock` nachschärfen. Und:
-  fühlt sich die Mengenwahl ohne vorgekaute Antwort jetzt wie eine echte Entscheidung an?
-- **Bewusst gelassen:** Die „Marktauslastung X%"-Zeile (Sättigungs-Vorschau aus #2) bleibt — sie
-  betrifft die Preis-Haircut-Mechanik, nicht die „wie viel brauen = passend"-Antwort. Falls sie
-  sich im Playtest auch zu vorgekaut anfühlt, separat entschärfen.
+**Status:** Teil 1 (Forecast entschärft: nur Preis/Saison/Tendenz, keine „~X hl · passend"-Antwort)
++ Teil 2 (Lager-Konsequenz: Notverkauf/Schwund über `B.stock`). **Korrektur diese Session:** Die
+Konsequenz war im Log — auf Nutzerwunsch raus, jetzt pro-Sorte-Darstellung (siehe #0b). Mechanik
+(Schwund/Notverkauf) bleibt, nur die Sichtbarkeit ist jetzt Anzeige statt Log. Offen: Hart-Playtest,
+ob die Lager-Strafe scharf genug ist (`B.stock` justierbar).
 
 > Hinweis: #0/#0b sind bereits in Arbeit. Das hier ist eine ERGÄNZUNG, kein Umsturz —
 > dieselbe Baustelle, eine Ebene tiefer gedacht. Verschiebt die Lagermechanik bewusst aus

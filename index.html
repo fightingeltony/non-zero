@@ -354,9 +354,20 @@ const B = {
   // ratio = verkauft / Markt ; satMult = ratio<=sweet ? 1 : max(floor, 1-(ratio-sweet)*steep)
   saturation: { sweet:0.82, steep:2.2, floor:0.5 },
   // Lager (#0c Teil 2): Altbestand wird teils unter Wert notverkauft (fireSalePrice je hl,
-  // Anteil fireSaleFrac), der Rest verdirbt je Quartal (spoilRate). Macht Überproduktion teuer
-  // und sichtbar (Log). Werte hier justierbar — durch Spielen auf „Hart" nachschärfen.
+  // Anteil fireSaleFrac), der Rest verdirbt je Quartal (spoilRate). Macht Überproduktion teuer;
+  // sichtbar als Lager-Anzeige pro Sorte (renderBrews), nicht im Log. Werte hier justierbar.
   stock: { spoilRate:0.20, fireSalePrice:300, fireSaleFrac:[0.2,0.45] },
+  // Kooperations-Achse (#K): einmaliger Wendepunkt „wankender Nachbar" in der Spielmitte.
+  // Aufkaufen = billige Kapazität, aber Markt schrumpft (Extraktion frisst die Grundlage).
+  // Teilen = dauerhaft −Fixkosten, Markt bleibt lebendig, ABER verletzlich (Folge-Ereignis).
+  // Ablehnen = Nachbar geht unter, Markt schrumpft leicht. Alle Werte hier justierbar.
+  cooperation: {
+    triggerYear:4, triggerRep:45, neighborName:"Brauerei Stägehof",
+    buyout:  { cost:9000, capAdd:40, marketMult:0.85, repHit:6 },
+    share:   { buyIn:4000, fixMult:0.85, marketMult:1.05 },
+    decline: { marketMult:0.95 },
+    followup:{ year:6, saveCost:5000, failMarketMult:0.92, failRepHit:4 },
+  },
   rnd: { costPerQ:2500, durationQ:3, qualitySpread:[0.88,1.12] },
   seasons: { Frühling:1.05, Sommer:1.25, Herbst:1.0, Winter:0.85 },
 };
@@ -502,11 +513,12 @@ function newGame(diffKey) {
     rep: B.start.rep,
     capacity: B.start.capacity,
     marketSize: B.start.marketSize,
-    stock: 0,
     brews: BASE_BREWS.map(b => ({
       ...b, pull: {...b.pull}, priceMod: 1, plan: b.id==="lager"?22:b.id==="ipa"?10:4,
-      lastSold: undefined, lastAvail: undefined,
+      lastSold: undefined, lastAvail: undefined, stock: 0,
     })),
+    neighbor: { resolved:false, mode:null, followupDone:false }, // #K Kooperations-Achse
+    shared: false,
     marketing: 1500,
     buildings: [],
     staff: {},
@@ -548,7 +560,8 @@ function fixedCost() {
   for (const r of B.staff) if (S.staff[r.id]) f += r.wage;
   for (const p of S.rndProjects) f += B.rnd.costPerQ;
   const upgEff = S.upgrades.energie ? B.upgrades.find(u=>u.id==="energie").fixMult : 1;
-  f = Math.round(f * upgEff);
+  const coopEff = S.shared ? B.cooperation.share.fixMult : 1; // #K geteilte Infrastruktur senkt Fixkosten
+  f = Math.round(f * upgEff * coopEff);
   return f;
 }
 
@@ -668,7 +681,7 @@ function finishRndProject(p) {
     meta: "Eigenkreation · " + dir.name,
     baseDemand: Math.round(rnd(12,20)),
     pull: { Frühling:1, Sommer:1, Herbst:1, Winter:1 },
-    priceMod: 1, plan: 0, rarity:"rare",
+    priceMod: 1, plan: 0, rarity:"rare", stock: 0,
     traitLabels: [dir.name],
   };
   dir.apply(brew);
@@ -725,11 +738,75 @@ function startQuarter() {
 }
 
 function pickEvent() {
+  // #K: gegatete Kooperations-Wendepunkte haben Vorrang vor dem Zufallspool.
+  const coop = pickCoopEvent();
+  if (coop) { S.lastEvent = coop.id; return coop; }
   let pool = EVENTS.filter(e => e.id !== S.lastEvent);
   pool = pool.filter(e => !e.crisis || Math.random() < (S.diffKey==="hard" ? 0.45 : 0.25));
   const e = pool.length ? pool[Math.floor(Math.random()*pool.length)] : EVENTS[0];
   S.lastEvent = e.id;
   return e;
+}
+
+/* ──────────────────────────────────────────────
+   #K KOOPERATIONS-ACHSE — „der wankende Nachbar"
+   Erster Akteur, der reagiert: aufkaufen (Game A) vs. teilen (Game B) vs. ziehen lassen.
+   Eisernes Designgesetz (GAME_DESIGN §7c): möglich, lohnend, VERLETZLICH — kein Gewinnknopf.
+   ────────────────────────────────────────────── */
+function pickCoopEvent() {
+  if (!S.neighbor) return null;
+  const C = B.cooperation;
+  // Hauptwendepunkt: einmal pro Partie, Spielmitte, ab Ruf-Schwelle.
+  if (!S.neighbor.resolved && S.year >= C.triggerYear && S.rep >= C.triggerRep) return makeCoopEvent();
+  // Folge: geteilte Infrastruktur ist verletzlich — der Partner kann später wanken.
+  if (S.neighbor.mode === "shared" && !S.neighbor.followupDone && S.year >= C.followup.year) return makeCoopFollowup();
+  return null;
+}
+
+function makeCoopEvent() {
+  const C = B.cooperation, fixPct = Math.round((1 - C.share.fixMult) * 100);
+  return {
+    id:"coop_nachbar", tag:"Nachbarschaft", risk:true,
+    title:"Der wankende Nachbar",
+    desc:`${C.neighborName} im Nachbardorf ist zu schnell gewachsen und steckt in der Fixkostenfalle — die Liquidität klemmt. Der Inhaber kommt zu dir: kaufst du ihn auf, oder findet ihr einen anderen Weg?`,
+    choices:[
+      { lab:`Aufkaufen — ${fmt(C.buyout.cost)} · +${C.buyout.capAdd} hl`,
+        odds:`<span class="danger">Regionaler Markt schrumpft · Ruf −${C.buyout.repHit}</span>`,
+        run(){ const c=C.buyout; S.capacity += c.capAdd; S.marketSize = Math.round(S.marketSize * c.marketMult);
+          S.neighbor.mode="bought"; S.neighbor.resolved=true;
+          return { cash:-c.cost, rep:-c.repHit, txt:`${C.neighborName} aufgekauft — günstige Kapazität. Aber der regionale Markt verliert eine Brauerei.`, cls:"" }; } },
+      { lab:`Infrastruktur teilen — ${fmt(C.share.buyIn)}`,
+        odds:`<span style="color:var(--green-t)">Fixkosten −${fixPct}% dauerhaft · Markt bleibt lebendig</span>`,
+        run(){ const c=C.share; S.shared=true; S.marketSize = Math.round(S.marketSize * c.marketMult);
+          S.neighbor.mode="shared"; S.neighbor.resolved=true;
+          return { cash:-c.buyIn, rep:+2, txt:`Ihr teilt die Abfüllstraße — beide senken die Fixkosten. Jetzt seid ihr aneinander gebunden.`, cls:"good" }; } },
+      { lab:`Ablehnen`,
+        odds:`Er macht allein weiter — oder geht unter`,
+        run(){ const c=C.decline; S.marketSize = Math.round(S.marketSize * c.marketMult);
+          S.neighbor.mode="failed"; S.neighbor.resolved=true;
+          return { cash:0, rep:0, txt:`Du lässt ${C.neighborName} ziehen. Kurz darauf schliesst die Brauerei.`, cls:"" }; } },
+    ],
+  };
+}
+
+function makeCoopFollowup() {
+  const C = B.cooperation, f = C.followup, fixPct = Math.round((1 - C.share.fixMult) * 100);
+  return {
+    id:"coop_followup", tag:"Nachbarschaft", crisis:true,
+    title:`${C.neighborName} wankt erneut`,
+    desc:`Dein Partner ${C.neighborName} steckt wieder in der Klemme. Hältst du die geteilte Infrastruktur am Leben — oder lässt du die Partnerschaft platzen?`,
+    choices:[
+      { lab:`Aushelfen — ${fmt(f.saveCost)}`,
+        odds:`<span style="color:var(--green-t)">Partnerschaft bleibt (Fixkosten −${fixPct}%)</span>`,
+        run(){ S.neighbor.followupDone=true;
+          return { cash:-f.saveCost, rep:+2, txt:`Du springst ein. Die geteilte Abfüllstraße läuft weiter — die Bindung trägt.`, cls:"good" }; } },
+      { lab:`Partnerschaft beenden`,
+        odds:`<span class="danger">Fixkosten-Vorteil weg · Ruf −${f.failRepHit}</span>`,
+        run(){ S.shared=false; S.neighbor.mode="ended"; S.neighbor.followupDone=true;
+          S.marketSize = Math.round(S.marketSize * f.failMarketMult);
+          return { cash:0, rep:-f.failRepHit, txt:`Du ziehst dich zurück. ${C.neighborName} schliesst, der geteilte Vorteil ist weg.`, cls:"bad" }; } },
+    ],
+  };
 }
 
 function chooseEvent(i) {
@@ -786,7 +863,7 @@ function resolveQuarter(eventRes) {
   for (const b of S.brews) {
     const avail = produced[b.id] || 0;
     prodTotal += avail;
-    if (avail === 0 && b.plan === 0) continue;
+    if (avail === 0 && b.plan === 0) { b.lastSold = 0; b.lastAvail = 0; continue; }
     const cultMult = b.cultDemand ? 1.30 : 1;
     const pm = b.priceMod || 1;
     const elas = clamp(1-(pm-1)*B.demand.priceElasticity, B.demand.priceFloor, 1.50);
@@ -812,16 +889,20 @@ function resolveQuarter(eventRes) {
     revenue *= satMult;
   }
 
-  // Lager (#0c Teil 2): Überproduktion soll wehtun UND sichtbar sein. Altbestand teils unter
-  // Wert notverkaufen, Rest verdirbt anteilig — jede Folge landet im Log, damit man daraus lernt.
+  // Lager pro Sorte (#0b/#0c-Korrektur): Übermenge je Sorte wandert ins eigene Lager, Altbestand
+  // wird teils unter Wert notverkauft (außerhalb der Sättigung, wie zuvor), Rest verdirbt anteilig.
+  // Konsequenz wird NICHT geloggt — sie ist als Lager-Anzeige beim Planen sichtbar (siehe renderBrews)
+  // und schlägt über die fehlende Marge ohnehin aufs Quartalsergebnis durch.
   const leftover = Math.max(0, prodTotal - soldTotal);
-  const oldSold = Math.min(S.stock, Math.round(rnd(...B.stock.fireSaleFrac) * S.stock));
-  if (oldSold > 0) { revenue += oldSold * B.stock.fireSalePrice; notes.push(`Notverkauf ${oldSold} hl Altlager zu ${fmt(B.stock.fireSalePrice)}/hl.`); }
-  const carried = (S.stock - oldSold) + leftover;
-  S.stock = Math.round(carried * (1 - B.stock.spoilRate));
-  const spoiled = carried - S.stock;
-  if (leftover > 0) notes.push(`${leftover} hl unverkauft → Lager.`);
-  if (spoiled > 0) notes.push(`${spoiled} hl Lager verdorben.`);
+  let stockRevenue = 0;
+  for (const b of S.brews) {
+    if (b.stock === undefined) b.stock = 0;
+    const fireSold = Math.min(b.stock, Math.round(rnd(...B.stock.fireSaleFrac) * b.stock));
+    stockRevenue += fireSold * B.stock.fireSalePrice;
+    const leftoverB = Math.max(0, (b.lastAvail || 0) - (b.lastSold || 0));
+    b.stock = Math.round(((b.stock - fireSold) + leftoverB) * (1 - B.stock.spoilRate));
+  }
+  revenue += stockRevenue;
   S.cash += revenue;
 
   if (S.debt > 0) {
@@ -1064,6 +1145,9 @@ function renderBrews() {
       const tag = leftover<=0?"ausverkauft":`${leftover} hl übrig`;
       salesLine = `<span style="color:${col}">letzte Saison ${b.lastSold}/${b.lastAvail} · ${tag}</span>`;
     }
+    // Lager pro Sorte (#0b/#0c-Korrektur): unverkaufte hl beim Planen sichtbar, nicht im Log.
+    const stockLine = b.stock > 0 ? `<span style="color:var(--gold-d)">Lager ${b.stock} hl</span>` : "";
+    const infoLine = [salesLine, stockLine].filter(Boolean).join(" · ");
     let badges = "";
     if (b.rarity==="legend") badges += `<span class="badge legend">Kult</span>`;
     else if (b.rarity==="rare") badges += `<span class="badge rare">Eigenkreation</span>`;
@@ -1080,7 +1164,7 @@ function renderBrews() {
       <div class="brew-info">
         <div class="brew-name">${b.name} ${badges}</div>
         <div class="brew-meta est">${fmt(effPrice)}/hl · ${season()} · <span style="color:var(--green-t)">${pullTxt}</span></div>
-        ${salesLine ? `<div class="brew-meta">${salesLine}</div>` : ""}
+        ${infoLine ? `<div class="brew-meta">${infoLine}</div>` : ""}
       </div>
       <div class="brew-qty">
         <button data-bid="${b.id}" data-d="-4">−</button>
@@ -1137,7 +1221,8 @@ function updateProdFoot() {
   // Lagerbestand (unverkaufte hl aus Vorquartalen, nach Schwund). Reine Anzeige (#0b):
   // gebundenes Kapital sichtbar machen, damit Überproduktion lernbar wird.
   const st = document.getElementById("pfStock");
-  if (st) { st.textContent = Math.round(S.stock); st.style.color = S.stock > 0 ? "var(--gold-d)" : ""; }
+  const totalStock = S.brews.reduce((a,b)=>a+(b.stock||0), 0);
+  if (st) { st.textContent = Math.round(totalStock); st.style.color = totalStock > 0 ? "var(--gold-d)" : ""; }
 
   // Markt-Auslastung (Sättigungs-Vorschau): geplanter Absatz / Markt
   const projSold = S.brews.reduce((s,b)=>s + Math.min(b.plan, estimateDemand(b)), 0);
